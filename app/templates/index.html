@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人简历 AI 助手</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- 左侧：简历面板 -->
+    <aside class="sidebar">
+        <div class="topbar" style="border-bottom:1px solid var(--border); padding: 14px 20px;">
+            <div class="topbar-left">
+                <div class="topbar-logo">R</div>
+                <div>
+                    <div class="topbar-title">Resume AI</div>
+                    <div class="topbar-subtitle">个人简历智能助手</div>
+                </div>
+            </div>
+            <span class="badge badge-online"><span class="badge-dot"></span>在线</span>
+        </div>
+
+        <div class="resume-header">
+            <div class="resume-avatar" id="resume-avatar">张</div>
+            <div class="resume-name" id="resume-name">加载中...</div>
+            <div class="resume-title" id="resume-title">求职中</div>
+            <div class="resume-contacts" id="resume-contacts"></div>
+        </div>
+
+        <div class="resume-body">
+            <div class="resume-section">
+                <div class="resume-section-title">个人简介</div>
+                <div class="resume-summary" id="resume-summary"></div>
+            </div>
+
+            <div class="resume-section">
+                <div class="resume-section-title">教育经历</div>
+                <div id="sec-education"></div>
+            </div>
+
+            <div class="resume-section">
+                <div class="resume-section-title">实习经历</div>
+                <div id="sec-internship"></div>
+            </div>
+
+            <div class="resume-section">
+                <div class="resume-section-title">项目经验</div>
+                <div id="sec-projects"></div>
+            </div>
+
+            <div class="resume-section">
+                <div class="resume-section-title">技能栈</div>
+                <div id="sec-skills"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 右侧：聊天面板 -->
+    <main class="chat-panel">
+        <div class="chat-header">
+            <div class="chat-header-title">
+                <span class="ai-icon">🤖</span>
+                <span><span id="visitor-name">同学</span>的 AI 助手</span>
+            </div>
+            <div class="chat-header-actions">
+                <button class="btn btn-secondary" id="btn-new-chat" title="开启新会话">
+                    <span>＋</span> 新会话
+                </button>
+                <a href="/admin" class="btn btn-secondary" title="后台管理">
+                    <span>⚙</span> 管理后台
+                </a>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+            <!-- 欢迎卡片 -->
+            <div class="welcome" id="welcome">
+                <div class="welcome-icon">✨</div>
+                <h1>你好，我是 AI 简历助手</h1>
+                <p>
+                    我可以帮面试官和访客了解求职者的简历信息。<br>
+                    你可以询问教育背景、实习经历、项目成果、技术栈等任何问题。
+                </p>
+                <div class="suggestions">
+                    <div class="suggestion-card">
+                        <div class="tag">教育背景</div>
+                        <div class="q">请做一下自我介绍</div>
+                    </div>
+                    <div class="suggestion-card">
+                        <div class="tag">技术栈</div>
+                        <div class="q">你熟悉哪些编程语言和框架？</div>
+                    </div>
+                    <div class="suggestion-card">
+                        <div class="tag">项目经验</div>
+                        <div class="q">介绍一下你做过的项目和技术选型</div>
+                    </div>
+                    <div class="suggestion-card">
+                        <div class="tag">实习经历</div>
+                        <div class="q">讲讲你印象最深的一段实习做了什么</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-wrap">
+            <div class="input-box">
+                <textarea
+                    id="chat-input"
+                    rows="1"
+                    placeholder="向 AI 助手提问，例如：介绍一下你自己、你最熟悉的技术栈是什么..."
+                    maxlength="2000"
+                ></textarea>
+                <button class="send-btn" id="send-btn" title="发送 (Enter)">
+                    ➤
+                </button>
+            </div>
+            <div class="input-tip">按 Enter 发送，Shift + Enter 换行 · AI 回答仅供参考，关键信息请以简历原文为准</div>
+        </div>
+    </main>
+</div>
+
+<script src="/static/js/chat.js"></script>
+</body>
+</html>

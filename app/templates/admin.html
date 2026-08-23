@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>简历管理后台 · Resume AI Agent</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<style>
+body { background: var(--bg); }
+.admin-nav { display:flex; gap:10px; }
+.tab-group { display:flex; gap:8px; margin-bottom: 18px; border-bottom: 2px solid var(--border); padding-bottom: -2px;}
+.tab {
+    padding: 10px 18px; font-size:14px; font-weight:500; color: var(--text-secondary);
+    cursor:pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.tab.active { color: var(--primary); border-color: var(--primary); }
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+.list-item { padding: 12px; border:1px solid var(--border); border-radius: 10px; margin-bottom:10px; background:white;}
+.list-item-title { font-weight:600; font-size:14px; }
+.list-item-sub { font-size:12px; color: var(--text-secondary); margin-top:4px; }
+.hint { font-size:12px; color: var(--text-light); margin-bottom:10px; }
+.toast {
+    position: fixed; top: 20px; right: 20px; padding: 10px 18px;
+    border-radius: 8px; color:white; font-size:13px; z-index: 9999;
+    box-shadow: var(--shadow-lg); animation: slideIn 0.3s;
+}
+@keyframes slideIn { from { transform: translateX(120%); } to { transform: translateX(0); } }
+.toast-success { background: var(--success); }
+.toast-error { background: var(--error); }
+.json-preview {
+    background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: var(--radius-sm);
+    font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; line-height: 1.6;
+    max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+}
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+
+    <div class="admin-header">
+        <div>
+            <h2 style="font-size:20px;">📋 简历管理后台</h2>
+            <div style="font-size:13px; color: var(--text-secondary); margin-top:4px;">
+                维护您的简历信息，AI 助手会基于这些内容回答访客问题
+            </div>
+        </div>
+        <div class="admin-nav">
+            <a href="/" class="btn btn-secondary">← 返回前台</a>
+            <a href="/docs" class="btn btn-secondary" target="_blank">API文档</a>
+        </div>
+    </div>
+
+    <div class="tab-group">
+        <div class="tab active" data-tab="basic">基本信息</div>
+        <div class="tab" data-tab="education">教育经历</div>
+        <div class="tab" data-tab="internship">实习经历</div>
+        <div class="tab" data-tab="project">项目经验</div>
+        <div class="tab" data-tab="skill">技能</div>
+        <div class="tab" data-tab="memory">长期记忆</div>
+        <div class="tab" data-tab="debug">预览/调试</div>
+    </div>
+
+    <!-- =========================== 基本信息 =========================== -->
+    <div class="tab-content active" id="tab-basic">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:14px;">基本资料</h3>
+            <div class="hint">这里的信息会显示在简历侧栏，并用于 AI 回答问题。</div>
+            <div class="form-row">
+                <div class="form-group"><label>姓名 *</label><input id="f-name"></div>
+                <div class="form-group"><label>求职目标 / 头衔</label><input id="f-title" placeholder="如：后端开发实习生"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>邮箱</label><input id="f-email" type="email"></div>
+                <div class="form-group"><label>电话</label><input id="f-phone"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>所在地</label><input id="f-location" placeholder="如：北京市海淀区"></div>
+                <div class="form-group"><label>头像URL（可选）</label><input id="f-avatar"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>GitHub</label><input id="f-github" placeholder="https://github.com/xxx"></div>
+                <div class="form-group"><label>个人博客</label><input id="f-blog"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full"><label>个人简介 / 自我评价</label>
+                    <textarea id="f-summary" rows="5" placeholder="简要介绍自己：学校、专业方向、兴趣、求职意向等..."></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <span id="save-tip" style="color: var(--text-secondary); font-size:12px; margin-right:auto; display:none;"></span>
+                <button class="btn btn-primary" onclick="saveBasic()">💾 保存基本信息</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================== 教育经历 =========================== -->
+    <div class="tab-content" id="tab-education">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:14px;">添加教育经历</h3>
+            <div class="form-row">
+                <div class="form-group"><label>学校名称 *</label><input id="edu-school"></div>
+                <div class="form-group"><label>学位</label><input id="edu-degree" placeholder="本科/硕士/博士"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>专业</label><input id="edu-major"></div>
+                <div class="form-group"><label>时间</label>
+                    <div style="display:flex; gap:8px;">
+                        <input id="edu-start" placeholder="开始 2021.09" style="flex:1;">
+                        <input id="edu-end" placeholder="结束 2025.06" style="flex:1;">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full"><label>描述（GPA/奖学金/课程）</label>
+                    <textarea id="edu-desc" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="addItem('education')">＋ 添加教育经历</button>
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border); margin:20px 0;">
+            <h4 style="font-size:14px; margin-bottom:12px;">已有教育经历</h4>
+            <div id="list-education" class="empty">暂无记录</div>
+        </div>
+    </div>
+
+    <!-- =========================== 实习经历 =========================== -->
+    <div class="tab-content" id="tab-internship">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:14px;">添加实习经历</h3>
+            <div class="form-row">
+                <div class="form-group"><label>公司名称 *</label><input id="int-company"></div>
+                <div class="form-group"><label>职位</label><input id="int-position" placeholder="后端开发实习生"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>工作地点</label><input id="int-location"></div>
+                <div class="form-group"><label>时间</label>
+                    <div style="display:flex; gap:8px;">
+                        <input id="int-start" placeholder="开始" style="flex:1;">
+                        <input id="int-end" placeholder="结束" style="flex:1;">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>工作亮点（每行一条，使用回车分隔）</label>
+                    <textarea id="int-highlights" rows="5"
+                        placeholder="参与了 XX 系统的设计与开发&#10;优化 SQL 查询，接口性能提升 50%&#10;推动 XX 方案落地，覆盖 10w+ DAU"></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="addItem('internship')">＋ 添加实习经历</button>
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border); margin:20px 0;">
+            <h4 style="font-size:14px; margin-bottom:12px;">已有实习经历</h4>
+            <div id="list-internship" class="empty">暂无记录</div>
+        </div>
+    </div>
+
+    <!-- =========================== 项目经验 =========================== -->
+    <div class="tab-content" id="tab-project">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:14px;">添加项目经验</h3>
+            <div class="form-row">
+                <div class="form-group"><label>项目名称 *</label><input id="pj-name"></div>
+                <div class="form-group"><label>担任角色</label><input id="pj-role" placeholder="后端负责人 / 独立开发"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>项目链接</label><input id="pj-link"></div>
+                <div class="form-group"><label>时间</label>
+                    <div style="display:flex; gap:8px;">
+                        <input id="pj-start" placeholder="开始" style="flex:1;">
+                        <input id="pj-end" placeholder="结束" style="flex:1;">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>技术栈（逗号分隔）</label>
+                    <input id="pj-tech" placeholder="Python, FastAPI, Redis, MySQL">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full"><label>项目描述</label>
+                    <textarea id="pj-desc" rows="3" placeholder="这个项目解决什么问题，整体架构是怎样的..."></textarea>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>项目亮点 / 成果（每行一条）</label>
+                    <textarea id="pj-highlights" rows="5"
+                        placeholder="独立完成 XX 模块的设计与实现&#10;使用缓存后接口耗时从 500ms 降至 80ms&#10;用户量突破 1w+"></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="addItem('project')">＋ 添加项目经验</button>
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border); margin:20px 0;">
+            <h4 style="font-size:14px; margin-bottom:12px;">已有项目经验</h4>
+            <div id="list-projects" class="empty">暂无记录</div>
+        </div>
+    </div>
+
+    <!-- =========================== 技能 =========================== -->
+    <div class="tab-content" id="tab-skill">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:14px;">添加技能</h3>
+            <div class="form-row">
+                <div class="form-group"><label>技能分类</label>
+                    <input id="sk-cat" placeholder="编程语言 / 框架 / 工具 / 其他">
+                </div>
+                <div class="form-group"><label>技能项（逗号分隔）</label>
+                    <input id="sk-items" placeholder="Python, Go, JavaScript, C++">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="addItem('skill')">＋ 添加技能分组</button>
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border); margin:20px 0;">
+            <h4 style="font-size:14px; margin-bottom:12px;">已有技能</h4>
+            <div id="list-skills" class="empty">暂无记录</div>
+        </div>
+    </div>
+
+    <!-- =========================== 长期记忆 =========================== -->
+    <div class="tab-content" id="tab-memory">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:14px;">长期记忆管理</h3>
+            <div class="hint">
+                这里的记忆内容会跨会话被 AI 参考，可以用于补充简历中没有提到的信息、固定回答方式、面试官偏好等。
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>分类</label>
+                    <select id="mem-cat">
+                        <option value="resume_fact">resume_fact（简历事实补充）</option>
+                        <option value="qa_pair">qa_pair（固定问答对）</option>
+                        <option value="user_preference">user_preference（偏好）</option>
+                        <option value="interviewer_tip">interviewer_tip（面试技巧）</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>关键词 / 标签</label>
+                    <input id="mem-key" placeholder="例如：英语口语、期望薪资">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>重要程度（1-10，越大越优先）</label>
+                    <input id="mem-imp" type="number" min="1" max="10" value="5">
+                </div>
+                <div class="form-group"><label>来源</label>
+                    <input id="mem-src" value="admin" placeholder="admin / conversation:xxx">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group full">
+                    <label>记忆内容 *</label>
+                    <textarea id="mem-content" rows="4" placeholder="告诉 AI 的一条记忆，例如：&#10;期望薪资范围：200-300 元/天&#10;已通过英语六级，口语流利可日常沟通"></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="addMemory()">＋ 添加记忆</button>
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border); margin:20px 0;">
+            <h4 style="font-size:14px; margin-bottom:12px;">已有记忆</h4>
+            <div id="list-memory" class="empty">暂无记录</div>
+        </div>
+    </div>
+
+    <!-- =========================== 预览/调试 =========================== -->
+    <div class="tab-content" id="tab-debug">
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:10px;">上传简历文档自动解析</h3>
+            <div class="hint">上传 PDF / Word / TXT 格式的简历文件，AI 会自动提取信息并填充。会覆盖当前简历。</div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <input type="file" id="upload-file" accept=".pdf,.docx,.txt,.md"
+                       style="flex:1; min-width:200px; font-size:13px; padding:8px; border:1px solid var(--border); border-radius:8px;">
+                <button class="btn btn-primary" id="upload-btn" onclick="uploadResume()">📤 上传并解析</button>
+            </div>
+            <div id="upload-status" style="margin-top:10px; font-size:13px; display:none;"></div>
+        </div>
+
+
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:10px;">喂给 LLM 的简历文本预览</h3>
+            <div class="hint">这就是 AI 助手每次回答时看到的简历内容。可以用来校验字段是否完整。</div>
+            <button class="btn btn-secondary" onclick="loadExport()" style="margin-bottom:12px;">🔄 刷新预览</button>
+            <div id="export-area" class="json-preview">(点击上方刷新按钮)</div>
+        </div>
+
+        <div class="admin-card">
+            <h3 style="font-size:16px; margin-bottom:10px;">一键加载示例简历</h3>
+            <div class="hint">首次使用可以点击加载一份示例简历（后端开发方向的实习生简历），之后再改成你自己的信息。</div>
+            <button class="btn btn-primary" onclick="loadSample()">📋 加载示例简历</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+/* =========================================================
+   管理后台交互逻辑
+   ========================================================= */
+(function () {
+    const $ = (s) => document.querySelector(s);
+    const $$ = (s) => document.querySelectorAll(s);
+
+    // 标签切换
+    $$('.tab').forEach((t) => {
+        t.addEventListener('click', () => {
+            $$('.tab').forEach(x => x.classList.remove('active'));
+            $$('.tab-content').forEach(x => x.classList.remove('active'));
+            t.classList.add('active');
+            $('#tab-' + t.dataset.tab).classList.add('active');
+            if (t.dataset.tab === 'education') refreshList('education');
+            if (t.dataset.tab === 'internship') refreshList('internship');
+            if (t.dataset.tab === 'project') refreshList('project');
+            if (t.dataset.tab === 'skill') refreshList('skill');
+            if (t.dataset.tab === 'memory') refreshList('memory');
+        });
+    });
+
+    // 页面加载：取当前简历填入表单
+    let currentResumeId = null;
+    window.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const resp = await fetch('/api/resume');
+            const data = await resp.json();
+            if (data.success && data.data) fillBasic(data.data);
+        } catch {}
+    });
+
+    function fillBasic(r) {
+        currentResumeId = r.id;
+        $('#f-name').value = r.name || '';
+        $('#f-title').value = r.title || '';
+        $('#f-avatar').value = r.avatar || '';
+        $('#f-email').value = r.email || '';
+        $('#f-phone').value = r.phone || '';
+        $('#f-location').value = r.location || '';
+        $('#f-github').value = r.github || '';
+        $('#f-blog').value = r.blog || '';
+        $('#f-summary').value = r.summary || '';
+    }
+
+    // ---------- 保存基本信息 ----------
+    window.saveBasic = async function () {
+        const name = $('#f-name').value.trim();
+        if (!name) return toast('请输入姓名', 'error');
+        const payload = {
+            name,
+            title: $('#f-title').value.trim() || null,
+            avatar: $('#f-avatar').value.trim() || null,
+            email: $('#f-email').value.trim() || null,
+            phone: $('#f-phone').value.trim() || null,
+            location: $('#f-location').value.trim() || null,
+            github: $('#f-github').value.trim() || null,
+            blog: $('#f-blog').value.trim() || null,
+            summary: $('#f-summary').value.trim() || null,
+        };
+        let url, method;
+        if (currentResumeId) {
+            url = `/api/resume/${currentResumeId}`;
+            method = 'PUT';
+        } else {
+            url = '/api/resume';
+            method = 'POST';
+            // 新建时需要完整结构
+            Object.assign(payload, { educations: [], internships: [], projects: [], skills: [] });
+        }
+        const resp = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const j = await resp.json();
+        if (j.success) {
+            currentResumeId = j.data.id;
+            toast('保存成功！', 'success');
+        } else {
+            toast('保存失败：' + (j.detail || j.message), 'error');
+        }
+    };
+
+    // ---------- 添加子项 ----------
+    window.addItem = async function (type) {
+        if (!currentResumeId) return toast('请先在"基本信息"页保存姓名创建简历', 'error');
+        let payload, url;
+        if (type === 'education') {
+            const school = $('#edu-school').value.trim();
+            if (!school) return toast('请输入学校', 'error');
+            payload = {
+                school,
+                degree: $('#edu-degree').value.trim() || null,
+                major: $('#edu-major').value.trim() || null,
+                start_date: $('#edu-start').value.trim() || null,
+                end_date: $('#edu-end').value.trim() || null,
+                description: $('#edu-desc').value.trim() || null,
+            };
+            url = `/api/resume/${currentResumeId}/education`;
+        } else if (type === 'internship') {
+            const company = $('#int-company').value.trim();
+            if (!company) return toast('请输入公司名称', 'error');
+            payload = {
+                company,
+                position: $('#int-position').value.trim() || null,
+                start_date: $('#int-start').value.trim() || null,
+                end_date: $('#int-end').value.trim() || null,
+                location: $('#int-location').value.trim() || null,
+                highlights: splitLines($('#int-highlights').value),
+            };
+            url = `/api/resume/${currentResumeId}/internship`;
+        } else if (type === 'project') {
+            const name = $('#pj-name').value.trim();
+            if (!name) return toast('请输入项目名称', 'error');
+            payload = {
+                name,
+                role: $('#pj-role').value.trim() || null,
+                start_date: $('#pj-start').value.trim() || null,
+                end_date: $('#pj-end').value.trim() || null,
+                description: $('#pj-desc').value.trim() || null,
+                highlights: splitLines($('#pj-highlights').value),
+                tech_stack: splitComma($('#pj-tech').value),
+                link: $('#pj-link').value.trim() || null,
+            };
+            url = `/api/resume/${currentResumeId}/project`;
+        } else if (type === 'skill') {
+            const items = splitComma($('#sk-items').value);
+            if (!items.length) return toast('请输入至少一个技能项', 'error');
+            payload = {
+                category: $('#sk-cat').value.trim() || '技能',
+                items,
+            };
+            url = `/api/resume/${currentResumeId}/skill`;
+        }
+
+        const resp = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const j = await resp.json();
+        if (j.success) {
+            toast('添加成功！', 'success');
+            clearInputs(type);
+            refreshList(type);
+        } else {
+            toast('添加失败：' + (j.detail || j.message), 'error');
+        }
+    };
+
+    // ---------- 长期记忆 ----------
+    window.addMemory = async function () {
+        const content = $('#mem-content').value.trim();
+        if (!content) return toast('请填写记忆内容', 'error');
+        const payload = {
+            category: $('#mem-cat').value,
+            key: $('#mem-key').value.trim() || null,
+            content,
+            source: $('#mem-src').value.trim() || 'admin',
+            importance: parseInt($('#mem-imp').value || 5, 10),
+        };
+        const resp = await fetch('/api/memory', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const j = await resp.json();
+        if (j.success) {
+            toast('记忆已添加', 'success');
+            $('#mem-content').value = ''; $('#mem-key').value = '';
+            refreshList('memory');
+        } else toast('失败：' + (j.detail || j.message), 'error');
+    };
+
+    window.deleteMemory = async function (id) {
+        if (!confirm('确认删除这条记忆？')) return;
+        const r = await fetch('/api/memory/' + id, { method: 'DELETE' });
+        const j = await r.json();
+        if (j.success) { toast('已删除', 'success'); refreshList('memory'); }
+    };
+
+    // ---------- 刷新列表 ----------
+    async function refreshList(type) {
+        if (!currentResumeId) return;
+        const resp = await fetch('/api/resume/' + currentResumeId);
+        const j = await resp.json();
+        if (!j.success) return;
+        const r = j.data;
+
+        if (type === 'education') {
+            const html = r.educations.map(e => `
+                <div class="list-item">
+                    <div class="list-item-title">${esc(e.school)} · ${esc([e.degree, e.major].filter(Boolean).join(' / '))}</div>
+                    <div class="list-item-sub">${esc([e.start_date, e.end_date].filter(Boolean).join(' - ') || '未填写时间')}</div>
+                    ${e.description ? `<div class="list-item-sub" style="margin-top:6px;">${esc(e.description)}</div>` : ''}
+                </div>
+            `).join('');
+            renderList('list-education', html);
+        } else if (type === 'internship') {
+            const html = r.internships.map(it => `
+                <div class="list-item">
+                    <div class="list-item-title">${esc(it.company)} · ${esc(it.position || '实习生')}</div>
+                    <div class="list-item-sub">${esc([it.start_date, it.end_date, it.location].filter(Boolean).join(' · ') || '未填写')}</div>
+                    ${it.highlights && it.highlights.length ? `<div style="margin-top:6px;"><ul style="padding-left:18px; font-size:12px; color: var(--text-secondary);">${it.highlights.map(h=>`<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+                </div>
+            `).join('');
+            renderList('list-internship', html);
+        } else if (type === 'project') {
+            const html = r.projects.map(p => `
+                <div class="list-item">
+                    <div class="list-item-title">${esc(p.name)} · ${esc(p.role || '参与')}</div>
+                    <div class="list-item-sub">${esc([p.start_date, p.end_date].filter(Boolean).join(' - ') || '未填写时间')}</div>
+                    ${p.tech_stack && p.tech_stack.length ? `<div class="list-item-sub" style="margin-top:4px;">技术栈：${esc(p.tech_stack.join(', '))}</div>` : ''}
+                    ${p.description ? `<div class="list-item-sub" style="margin-top:4px;">${esc(p.description)}</div>` : ''}
+                    ${p.highlights && p.highlights.length ? `<ul style="padding-left:18px; font-size:12px; color: var(--text-secondary); margin-top:6px;">${p.highlights.map(h=>`<li>${esc(h)}</li>`).join('')}</ul>` : ''}
+                </div>
+            `).join('');
+            renderList('list-projects', html);
+        } else if (type === 'skill') {
+            const html = r.skills.map(s => `
+                <div class="list-item">
+                    <div class="list-item-title">${esc(s.category || '技能')}</div>
+                    <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
+                        ${s.items.map(i=>`<span class="skill-tag">${esc(i)}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+            renderList('list-skills', html);
+        } else if (type === 'memory') {
+            const resp2 = await fetch('/api/memory?limit=100');
+            const j2 = await resp2.json();
+            const html = (j2.data || []).map(m => `
+                <div class="list-item">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div style="flex:1;">
+                            <div class="list-item-title">
+                                <span class="badge" style="background:#eff6ff; color:#1d4ed8; margin-right:6px;">${esc(m.category)}</span>
+                                ${esc(m.key || '')}
+                                <span style="font-size:11px; color:var(--text-light); margin-left:8px;">重要度 ${m.importance} · 引用 ${m.access_count}次</span>
+                            </div>
+                            <div class="list-item-sub" style="margin-top:6px; white-space:pre-wrap;">${esc(m.content)}</div>
+                        </div>
+                        <button class="btn btn-secondary btn-icon" title="删除" onclick="deleteMemory(${m.id})" style="margin-left:10px;">🗑</button>
+                    </div>
+                </div>
+            `).join('');
+            renderList('list-memory', html);
+        }
+    }
+
+    function renderList(id, html) {
+        const el = $('#' + id);
+        if (!html) { el.className = 'empty'; el.textContent = '暂无记录'; }
+        else { el.className = ''; el.innerHTML = html; }
+    }
+
+    // ---------- 预览/调试 ----------
+    window.loadExport = async function () {
+        const rid = currentResumeId ? `?resume_id=${currentResumeId}` : '';
+        const resp = await fetch('/api/resume/export/text' + rid);
+        const j = await resp.json();
+        const area = $('#export-area');
+        if (!j.success) { area.textContent = '失败：' + (j.detail || j.message); return; }
+        const d = j.data;
+        area.textContent = `姓名: ${d.name}\n字符数: ${d.length}\n\n` + '='.repeat(60) + '\n\n' + d.text;
+    };
+
+    window.uploadResume = async function () {
+        const input = $('#upload-file');
+        const btn = $('#upload-btn');
+        const status = $('#upload-status');
+        if (!input.files || !input.files[0]) return toast('请先选择文件', 'error');
+        const file = input.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        btn.disabled = true;
+        btn.textContent = '⏳ AI 解析中...';
+        status.style.display = 'block';
+        status.style.color = 'var(--text-secondary)';
+        status.textContent = '正在上传文件并由 AI 解析，请稍候（约 5-15 秒）...';
+        try {
+            const resp = await fetch('/api/resume/upload', { method: 'POST', body: formData });
+            const j = await resp.json();
+            if (j.success) {
+                currentResumeId = j.data.id;
+                fillBasic(j.data);
+                status.style.color = 'var(--success)';
+                status.textContent = '✅ ' + j.message;
+                toast('简历解析成功！', 'success');
+            } else {
+                status.style.color = 'var(--error)';
+                status.textContent = '❌ ' + (j.detail || j.message);
+                toast('解析失败', 'error');
+            }
+        } catch (e) {
+            status.style.color = 'var(--error)';
+            status.textContent = '❌ 网络错误: ' + e.message;
+            toast('上传失败', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '📤 上传并解析';
+        }
+    };
+
+    window.loadSample = async function () {
+        if (!confirm('会覆盖当前简历基本信息（不会删除已有经历子项，需要手动删除），继续？')) return;
+        const sample = {
+            name: '张同学',
+            title: '后端开发实习生',
+            avatar: null,
+            email: 'zhangtx@example.com',
+            phone: '138-0000-0000',
+            location: '北京市海淀区',
+            github: 'https://github.com/zhangtx',
+            blog: 'https://zhangtx.dev',
+            summary: '某 985 高校计算机系在读硕士，主修分布式系统与后端工程。具备 2 段大厂实习经历，熟悉 Python/Go/JS，主导或参与过 5+ 个可上线项目。对高并发、缓存设计、工程规范有实战经验。期望在后端/全栈方向深入发展。',
+            educations: [
+                { school: '某某大学', degree: '硕士', major: '计算机科学与技术', start_date: '2023.09', end_date: '2026.06', description: 'GPA 3.8/4.0，获校级一等奖学金；主要修读：分布式系统、高级算法、机器学习系统。' }
+            ],
+            internships: [
+                { company: '某互联网大厂', position: '后端开发实习生', start_date: '2025.03', end_date: '至今', location: '北京',
+                  highlights: ['负责 XX 业务中台的订单核心模块开发与维护，使用 FastAPI + Redis + MySQL', '重构鉴权中间件，请求平均耗时降低 22%', '撰写接口自动化用例 60+ 条，覆盖率从 35% 提升到 78%'] },
+                { company: '某创业公司', position: '全栈开发实习生', start_date: '2024.07', end_date: '2024.12', location: '上海',
+                  highlights: ['从 0 到 1 搭建内部运营后台，服务 30+ 运营同学日常使用', '使用 Vue 3 + FastAPI + PostgreSQL，前后端一人交付', '对接 3 个第三方数据平台，完成对账准确率 100%'] }
+            ],
+            projects: [
+                { name: '个人简历 AI Agent', role: '独立开发', start_date: '2025.08', end_date: '至今',
+                  description: '基于 FastAPI + 兼容 OpenAI 接口构建的个人简历问答网站，支持流式对话、持久记忆、可直接部署上线。',
+                  tech_stack: ['Python', 'FastAPI', 'SQLAlchemy', 'SQLite', 'Jinja2', 'SSE', 'OpenAI API'],
+                  highlights: ['实现会话级记忆 + 长期记忆双层架构，AI 回答可跨会话引用关键信息', '支持 SSE 流式输出，前端打字机效果，访客体验流畅', '提供完整后台管理页面，可编辑简历和记忆内容'],
+                  link: 'https://example.com'
+                }
+            ],
+            skills: [
+                { category: '编程语言', items: ['Python', 'Go', 'JavaScript', 'TypeScript', 'C++'] },
+                { category: '框架 / 中间件', items: ['FastAPI', 'Flask', 'Django', 'Gin', 'Vue 3', 'Redis', 'MySQL', 'PostgreSQL'] },
+                { category: '工具 / 其他', items: ['Git', 'Docker', 'Linux', 'AWS', 'CI/CD', 'Pytest', 'Jest'] }
+            ]
+        };
+        const method = currentResumeId ? 'PUT' : 'POST';
+        const url = currentResumeId ? `/api/resume/${currentResumeId}` : '/api/resume';
+        const resp = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(sample) });
+        const j = await resp.json();
+        if (j.success) {
+            currentResumeId = j.data.id;
+            fillBasic(j.data);
+            toast('示例简历加载成功！', 'success');
+        } else toast('失败：' + (j.detail || j.message), 'error');
+    };
+
+    // ---------- 工具 ----------
+    function splitLines(v) {
+        return (v || '').split('\n').map(s => s.trim()).filter(Boolean);
+    }
+    function splitComma(v) {
+        return (v || '').split(/[,，]/).map(s => s.trim()).filter(Boolean);
+    }
+    function esc(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function toast(msg, type = 'success') {
+        const el = document.createElement('div');
+        el.className = 'toast toast-' + type;
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
+    }
+    function clearInputs(type) {
+        if (type === 'education') ['edu-school','edu-degree','edu-major','edu-start','edu-end','edu-desc'].forEach(i => $('#'+i).value = '');
+        if (type === 'internship') ['int-company','int-position','int-location','int-start','int-end','int-highlights'].forEach(i => $('#'+i).value = '');
+        if (type === 'project') ['pj-name','pj-role','pj-link','pj-start','pj-end','pj-tech','pj-desc','pj-highlights'].forEach(i => $('#'+i).value = '');
+        if (type === 'skill') ['sk-cat','sk-items'].forEach(i => $('#'+i).value = '');
+    }
+})();
+</script>
+</body>
+</html>

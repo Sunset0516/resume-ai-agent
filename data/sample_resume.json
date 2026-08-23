@@ -1,0 +1,84 @@
+{
+  "_comment": "示例简历数据：可通过 POST /api/resume 导入，或在管理后台点击“加载示例简历”",
+  "name": "张同学",
+  "title": "后端开发实习生",
+  "avatar": null,
+  "email": "zhangtx@example.com",
+  "phone": "138-0000-0000",
+  "location": "北京市海淀区",
+  "github": "https://github.com/zhangtx",
+  "blog": "https://zhangtx.dev",
+  "summary": "某 985 高校计算机系在读硕士，主修分布式系统与后端工程。具备 2 段大厂实习经历，熟悉 Python/Go/JS，主导或参与过 5+ 个可上线项目。对高并发、缓存设计、工程规范有实战经验。期望在后端/全栈方向深入发展。",
+  "educations": [
+    {
+      "school": "某某大学",
+      "degree": "硕士",
+      "major": "计算机科学与技术",
+      "start_date": "2023.09",
+      "end_date": "2026.06",
+      "description": "GPA 3.8/4.0，获校级一等奖学金；主要修读：分布式系统、高级算法、机器学习系统。"
+    }
+  ],
+  "internships": [
+    {
+      "company": "某互联网大厂",
+      "position": "后端开发实习生",
+      "start_date": "2025.03",
+      "end_date": "至今",
+      "location": "北京",
+      "highlights": [
+        "负责 XX 业务中台的订单核心模块开发与维护，技术栈 FastAPI + Redis + MySQL",
+        "重构鉴权中间件，请求平均耗时降低 22%，峰值 QPS 提升至 1200",
+        "撰写接口自动化用例 60+ 条，覆盖率从 35% 提升到 78%"
+      ]
+    },
+    {
+      "company": "某创业公司",
+      "position": "全栈开发实习生",
+      "start_date": "2024.07",
+      "end_date": "2024.12",
+      "location": "上海",
+      "highlights": [
+        "从 0 到 1 搭建内部运营后台，服务 30+ 运营同学日常使用",
+        "使用 Vue 3 + FastAPI + PostgreSQL，前后端一人交付",
+        "对接 3 个第三方数据平台，完成每日自动对账，准确率 100%"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "个人简历 AI Agent",
+      "role": "独立开发",
+      "start_date": "2025.08",
+      "end_date": "至今",
+      "description": "基于 FastAPI + 兼容 OpenAI 接口构建的个人简历问答网站，支持流式对话、持久记忆、可直接部署上线。",
+      "tech_stack": ["Python", "FastAPI", "SQLAlchemy", "SQLite", "Jinja2", "SSE", "OpenAI API"],
+      "highlights": [
+        "实现会话级记忆 + 长期记忆双层架构，AI 回答可跨会话引用关键信息",
+        "支持 SSE 流式输出，前端打字机效果，访客体验流畅",
+        "提供完整后台管理页面，可编辑简历、添加长期记忆",
+        "单文件 SQLite 持久化，部署简单，一条命令即可启动"
+      ],
+      "link": "https://example.com"
+    },
+    {
+      "name": "校园二手交易平台",
+      "role": "后端负责人",
+      "start_date": "2024.03",
+      "end_date": "2024.06",
+      "description": "面向在校大学生的二手物品交易平台，支持发布/搜索/下单/消息通知等功能。",
+      "tech_stack": ["Go", "Gin", "MySQL", "Redis", "WebSocket", "Docker"],
+      "highlights": [
+        "团队 4 人担任后端负责人，设计用户/商品/订单/消息 4 个核心模块",
+        "使用 Redis + 延迟队列实现订单超时自动取消，日均处理 2000+ 订单",
+        "上线 2 个月累计注册用户 3000+，DAU 峰值 500+"
+      ],
+      "link": null
+    }
+  ],
+  "skills": [
+    { "category": "编程语言", "items": ["Python", "Go", "JavaScript", "TypeScript", "C++"] },
+    { "category": "框架 / 中间件", "items": ["FastAPI", "Flask", "Django", "Gin", "Vue 3", "Redis", "MySQL", "PostgreSQL", "RabbitMQ"] },
+    { "category": "工具 / 工程", "items": ["Git", "Docker", "Linux", "AWS", "GitHub Actions", "Pytest", "Jest", "Swagger"] }
+  ]
+}
