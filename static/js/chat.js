@@ -5,11 +5,32 @@
     'use strict';
 
     // ------------------ 状态管理 ------------------
+    const OWNER_STORAGE_KEY = 'resume_owner_key';
     const state = {
         sessionId: null,
         loading: false,
         resume: null,
+        ownerKey: localStorage.getItem(OWNER_STORAGE_KEY) || null,
     };
+
+    function saveOwnerKeyFromResponse(resp) {
+        if (!resp || !resp.headers) return;
+        const k = resp.headers.get('X-Owner-Key');
+        if (k && state.ownerKey !== k) {
+            state.ownerKey = k;
+            try { localStorage.setItem(OWNER_STORAGE_KEY, k); } catch(e){}
+        }
+    }
+    function authHeaders() {
+        const h = { 'Content-Type': 'application/json' };
+        if (state.ownerKey) h['X-Owner-Key'] = state.ownerKey;
+        return h;
+    }
+    function addOwnerQuery(url) {
+        if (!state.ownerKey) return url;
+        const sep = url.indexOf('?') >= 0 ? '&' : '?';
+        return url + sep + 'owner_key=' + encodeURIComponent(state.ownerKey);
+    }
 
     // ------------------ DOM 快捷访问 ------------------
     const $ = (sel) => document.querySelector(sel);
@@ -68,7 +89,10 @@
     // ------------------ 加载简历 ------------------
     async function loadResume() {
         try {
-            const resp = await fetch('/api/resume');
+            const resp = await fetch(addOwnerQuery('/api/resume'), {
+                headers: authHeaders(),
+            });
+            saveOwnerKeyFromResponse(resp);
             const data = await resp.json();
             if (data.success && data.data) {
                 state.resume = data.data;
@@ -255,15 +279,19 @@
         let assistantBubble = null;
 
         try {
-            const resp = await fetch('/api/chat/stream', {
+            let streamDone = false;
+            let lastDataTs = Date.now();
+            const streamTimeoutMs = 60_000;  // 60s 无任何SSE事件判定超时
+            const resp = await fetch(addOwnerQuery('/api/chat/stream'), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders(),
                 body: JSON.stringify({
                     message: text,
                     session_id: state.sessionId,
                     stream: true,
                 }),
             });
+            saveOwnerKeyFromResponse(resp);
 
             if (!resp.ok || !resp.body) {
                 throw new Error(`HTTP ${resp.status}`);
@@ -275,18 +303,33 @@
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
             let assistantText = '';
+            let hbCount = 0;
 
-            while (true) {
+            const watchdog = setInterval(() => {
+                if (streamDone) { clearInterval(watchdog); return; }
+                if (Date.now() - lastDataTs > streamTimeoutMs) {
+                    clearInterval(watchdog);
+                    const msg = 'LLM流式响应超时（超过60秒无数据）。请重试或检查网络。';
+                    if (!assistantBubble) assistantBubble = appendMessage('assistant', '');
+                    assistantBubble.textContent = assistantText + (assistantText ? '\n\n' : '') + '⚠ ' + msg;
+                    scrollBottom();
+                    reader.cancel().catch(()=>{});
+                }
+            }, 2000);
+
+            try {
+              while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) { streamDone = true; break; }
+                lastDataTs = Date.now();
                 buffer += decoder.decode(value, { stream: true });
 
-                // SSE 按行解析
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
                 for (const raw of lines) {
                     const line = raw.trim();
-                    if (!line || !line.startsWith('data:')) continue;
+                    if (!line) continue;
+                    if (!line.startsWith('data:')) continue;
                     const payload = line.slice(5).trim();
                     if (!payload) continue;
                     let evt;
@@ -300,13 +343,19 @@
                         assistantText += evt.content;
                         if (assistantBubble) assistantBubble.textContent = assistantText;
                         scrollBottom();
+                    } else if (evt.type === 'heartbeat') {
+                        hbCount += 1;
                     } else if (evt.type === 'end') {
-                        // 结束
+                        streamDone = true;
                     } else if (evt.type === 'error') {
                         if (!assistantBubble) assistantBubble = appendMessage('assistant', '');
                         assistantBubble.textContent = assistantText + (assistantText ? '\n\n' : '') + `⚠ ${evt.message}`;
                     }
                 }
+              }
+            } finally {
+              streamDone = true;
+              clearInterval(watchdog);
             }
 
         } catch (err) {

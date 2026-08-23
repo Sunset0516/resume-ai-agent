@@ -17,6 +17,37 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings, BASE_DIR, ensure_directories
 from .database import init_db, get_db
+import uuid
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Response, Request
+
+OWNER_COOKIE = "x_owner_key"
+OWNER_HEADER = "X-Owner-Key"
+
+
+def _gen_owner_key():
+    return "ok_" + uuid.uuid4().hex[:16]
+
+
+class OwnerMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        owner = (
+            request.cookies.get(OWNER_COOKIE)
+            or request.headers.get(OWNER_HEADER, "").strip()
+            or (request.query_params.get("owner_key") or "").strip()
+            or _gen_owner_key()
+        )
+        request.state.owner_key = owner
+        resp: Response = await call_next(request)
+        if request.cookies.get(OWNER_COOKIE) != owner:
+            resp.set_cookie(OWNER_COOKIE, owner, max_age=7776000, path="/", samesite="lax")
+        resp.headers[OWNER_HEADER] = owner
+        resp.headers["Access-Control-Expose-Headers"] = OWNER_HEADER
+        return resp
+
+
+def get_owner_key(request: Request):
+    return getattr(request.state, "owner_key", _gen_owner_key())
 from .api import chat as chat_router
 from .api import resume as resume_router
 from .api import memory as memory_router
@@ -56,6 +87,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# 1) OwnerMiddleware 必须放在最外层（比CORSMiddleware先执行），
+#    保证每个请求都能拿到 owner_key，并且响应头包含 X-Owner-Key。
+app.add_middleware(OwnerMiddleware)
 
 # CORS 配置（允许从任意域名访问，部署上线时建议限制到具体域名）
 app.add_middleware(

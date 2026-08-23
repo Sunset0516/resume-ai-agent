@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..main import get_owner_key
 from ..schemas import ChatRequest, ChatResponse, ApiResponse
 from ..services.agent_service import ResumeAgentService
 from ..services.memory_service import MemoryService
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 async def chat_endpoint(
     req: ChatRequest,
     x_visitor_id: Optional[str] = Header(None),
+    owner_key: str = Depends(get_owner_key),
     db: Session = Depends(get_db),
 ):
     """
@@ -29,7 +31,7 @@ async def chat_endpoint(
     - visitor_id: 访客标识，也可通过请求头 X-Visitor-Id 传入
     """
     visitor_id = req.visitor_id or x_visitor_id
-    agent = ResumeAgentService(db)
+    agent = ResumeAgentService(db, owner_key=owner_key)
     try:
         result = agent.chat(
             message=req.message,
@@ -47,6 +49,7 @@ async def chat_endpoint(
 async def chat_stream_endpoint(
     req: ChatRequest,
     x_visitor_id: Optional[str] = Header(None),
+    owner_key: str = Depends(get_owner_key),
     db: Session = Depends(get_db),
 ):
     """
@@ -57,7 +60,7 @@ async def chat_stream_endpoint(
       data: {"type": "end", ...}
     """
     visitor_id = req.visitor_id or x_visitor_id
-    agent = ResumeAgentService(db)
+    agent = ResumeAgentService(db, owner_key=owner_key)
 
     async def event_generator():
         async for chunk in agent.chat_stream(
@@ -67,24 +70,29 @@ async def chat_stream_endpoint(
         ):
             yield chunk
 
+    resp_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    # 将 owner_key 写回响应头，方便前端持久化
+    if owner_key:
+        resp_headers["X-Owner-Key"] = owner_key
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=resp_headers,
     )
 
 
 @router.get("/sessions", response_model=ApiResponse)
 def list_sessions(
     visitor_id: Optional[str] = None,
+    owner_key: str = Depends(get_owner_key),
     db: Session = Depends(get_db),
 ):
     """获取会话列表（按最近更新排序）"""
-    mem = MemoryService(db)
+    mem = MemoryService(db, owner_key=owner_key)
     convs = mem.list_conversations(visitor_id=visitor_id)
     data = []
     for c in convs:

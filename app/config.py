@@ -17,8 +17,12 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://api.openai.com/v1"
     LLM_MODEL: str = "gpt-4o-mini"
-    LLM_TIMEOUT: int = 60
+    LLM_TIMEOUT: int = 120
+    LLM_STREAM_TIMEOUT: int = 180
+    LLM_FIRST_CHUNK_TIMEOUT: int = 30
+    LLM_RETRY: int = 2
     LLM_TEMPERATURE: float = 0.7
+    SSE_HEARTBEAT_INTERVAL: int = 15
 
     # ---------- 服务配置 ----------
     HOST: str = "0.0.0.0"

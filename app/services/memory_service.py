@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryService:
-    """持久化记忆管理"""
+    """持久化记忆管理（按 owner_key 隔离）"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, owner_key: str | None = None):
         self.db = db
+        self.owner_key = owner_key
 
     # ==========================================================
     # 会话级记忆管理
@@ -42,6 +43,7 @@ class MemoryService:
         session_id = session_id or f"sess_{uuid.uuid4().hex[:16]}"
         conv = Conversation(
             session_id=session_id,
+            owner_key=self.owner_key,
             visitor_id=visitor_id,
             title=title or "新会话",
             is_active=True,
@@ -60,6 +62,8 @@ class MemoryService:
     def list_conversations(self, visitor_id: Optional[str] = None,
                            limit: int = 50) -> List[Conversation]:
         q = self.db.query(Conversation)
+        if self.owner_key:
+            q = q.filter((Conversation.owner_key == self.owner_key) | (Conversation.owner_key.is_(None)))
         if visitor_id:
             q = q.filter(Conversation.visitor_id == visitor_id)
         return q.order_by(Conversation.updated_at.desc()).limit(limit).all()
@@ -116,6 +120,7 @@ class MemoryService:
                   source: Optional[str] = None, importance: int = 5) -> MemoryChunk:
         """添加一条长期记忆片段"""
         chunk = MemoryChunk(
+            owner_key=self.owner_key,
             category=category,
             key=key,
             content=content,
@@ -137,6 +142,8 @@ class MemoryService:
         - 结合重要性 + 命中次数综合排序
         """
         q = self.db.query(MemoryChunk)
+        if self.owner_key:
+            q = q.filter((MemoryChunk.owner_key == self.owner_key) | (MemoryChunk.owner_key.is_(None)))
         if categories:
             q = q.filter(MemoryChunk.category.in_(categories))
         candidates = q.order_by(MemoryChunk.importance.desc()).all()
@@ -169,6 +176,8 @@ class MemoryService:
 
     def list_chunks(self, category: Optional[str] = None, limit: int = 100) -> List[MemoryChunk]:
         q = self.db.query(MemoryChunk)
+        if self.owner_key:
+            q = q.filter((MemoryChunk.owner_key == self.owner_key) | (MemoryChunk.owner_key.is_(None)))
         if category:
             q = q.filter(MemoryChunk.category == category)
         return q.order_by(MemoryChunk.importance.desc(), MemoryChunk.created_at.desc()).limit(limit).all()

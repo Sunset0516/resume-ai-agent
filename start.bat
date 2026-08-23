@@ -1,4 +1,5 @@
 @echo off
+set PYTHONIOENCODING=utf-8
 chcp 65001 >nul
 cd /d D:\resume-ai-agent
 echo ============================================

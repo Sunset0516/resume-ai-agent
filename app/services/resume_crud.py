@@ -13,20 +13,39 @@ logger = logging.getLogger(__name__)
 
 
 class ResumeCRUD:
-    """简历增删查改"""
+    """简历增删查改（按 owner_key 隔离）"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, owner_key: str | None = None):
         self.db = db
+        self.owner_key = owner_key
 
     # ------------------------------------------------------------------
     # 简历主表
     # ------------------------------------------------------------------
     def get_default(self) -> Optional[Resume]:
-        """获取默认简历（第一条）"""
-        return self.db.query(Resume).order_by(Resume.id.asc()).first()
+        """获取当前 owner 的默认简历；兼容旧数据时owner_key=None回退全局"""
+        q = self.db.query(Resume)
+        if self.owner_key:
+            owned = q.filter(Resume.owner_key == self.owner_key).order_by(Resume.updated_at.desc()).first()
+            if owned:
+                return owned
+            # 兼容：若当前owner没简历，找无owner的迁移历史数据
+            orphan = q.filter((Resume.owner_key.is_(None)) | (Resume.owner_key == "")).order_by(Resume.id.asc()).first()
+            if orphan and self.owner_key:
+                orphan.owner_key = self.owner_key
+                self.db.commit()
+                self.db.refresh(orphan)
+                return orphan
+            return orphan
+        return q.order_by(Resume.id.asc()).first()
 
     def get(self, resume_id: int) -> Optional[Resume]:
-        return self.db.get(Resume, resume_id)
+        r = self.db.get(Resume, resume_id)
+        if not r:
+            return None
+        if self.owner_key and r.owner_key and r.owner_key != self.owner_key:
+            return None
+        return r
 
     def list_all(self) -> List[Resume]:
         return self.db.query(Resume).order_by(Resume.updated_at.desc()).all()
@@ -43,6 +62,7 @@ class ResumeCRUD:
             github=data.github,
             blog=data.blog,
             summary=data.summary,
+            owner_key=self.owner_key,
         )
         self.db.add(resume)
         self.db.flush()  # 拿到 resume.id
@@ -80,6 +100,8 @@ class ResumeCRUD:
     def delete(self, resume_id: int) -> bool:
         resume = self.db.get(Resume, resume_id)
         if not resume:
+            return False
+        if self.owner_key and resume.owner_key and resume.owner_key != self.owner_key:
             return False
         self.db.delete(resume)
         self.db.commit()

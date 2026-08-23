@@ -38,3 +38,31 @@ def init_db():
     # 导入模型确保Base.metadata包含所有表
     from . import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    _run_sqlite_migrations()
+
+
+def _run_sqlite_migrations():
+    """SQLite 自动迁移：新增列（列已存在则跳过）"""
+    if not settings.DATABASE_URL.startswith("sqlite"):
+        return
+    import logging as _lg
+    from sqlalchemy import text
+    lg = _lg.getLogger("db")
+    migrations = [
+        ("resumes", "owner_key", "ALTER TABLE resumes ADD COLUMN owner_key VARCHAR(100)"),
+        ("memory_chunks", "owner_key", "ALTER TABLE memory_chunks ADD COLUMN owner_key VARCHAR(100)"),
+        ("conversations", "owner_key", "ALTER TABLE conversations ADD COLUMN owner_key VARCHAR(100)"),
+    ]
+    with engine.connect() as conn:
+        for table, col, sql in migrations:
+            try:
+                rs = conn.execute(text(f"PRAGMA table_info({table})"))
+                cols = [r[1] for r in rs.fetchall()]
+                if col not in cols:
+                    conn.execute(text(sql))
+                    conn.commit()
+                    lg.info(f"[migrate] {table}.{col} 新增成功")
+                else:
+                    lg.info(f"[migrate] {table}.{col} 已存在，跳过")
+            except Exception as e:
+                lg.warning(f"[migrate] {table}.{col} skip: {e}")

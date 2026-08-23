@@ -22,6 +22,7 @@ class Resume(Base):
     github = Column(String(500), comment="GitHub链接")
     blog = Column(String(500), comment="个人博客")
     summary = Column(Text, comment="个人简介 / 自我评价")
+    owner_key = Column(String(100), index=True, comment="所有者标识（浏览器隔离用）")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -100,6 +101,7 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     session_id = Column(String(100), unique=True, index=True, nullable=False, comment="会话ID")
+    owner_key = Column(String(100), index=True, comment="简历所有者key")
     visitor_id = Column(String(100), index=True, comment="访客ID（用于区分不同用户）")
     title = Column(String(200), comment="会话标题")
     is_active = Column(Boolean, default=True, comment="是否活跃")
@@ -134,6 +136,7 @@ class MemoryChunk(Base):
     category = Column(String(50), index=True, comment="记忆分类：resume_fact / user_preference / qa_pair")
     key = Column(String(200), index=True, comment="记忆关键词/标签")
     content = Column(Text, nullable=False, comment="记忆内容")
+    owner_key = Column(String(100), index=True, comment="所有者标识")
     source = Column(String(200), comment="来源：admin / conversation:xxx")
     importance = Column(Integer, default=5, comment="重要程度 1-10")
     access_count = Column(Integer, default=0, comment="被引用次数")

@@ -6,6 +6,7 @@
 1. chat()  - 单轮非流式对话
 2. chat_stream() - 流式对话
 """
+import asyncio
 import json
 import logging
 from typing import AsyncGenerator, Tuple, Optional
@@ -45,12 +46,14 @@ SYSTEM_PROMPT_TEMPLATE = """你是「{name}」的私人简历 AI 助手。面试
 
 
 class ResumeAgentService:
-    """简历 AI Agent 服务"""
+    """简历 AI Agent 服务（按 owner_key 隔离）"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, owner_key: str | None = None, heartbeat_interval: int = 15):
         self.db = db
-        self.memory = MemoryService(db)
-        self.crud = ResumeCRUD(db)
+        self.owner_key = owner_key
+        self.heartbeat_interval = heartbeat_interval
+        self.memory = MemoryService(db, owner_key=owner_key)
+        self.crud = ResumeCRUD(db, owner_key=owner_key)
 
     # ------------------------------------------------------------------
     # 辅助：准备上下文
@@ -178,15 +181,68 @@ class ResumeAgentService:
         total_tokens = 0
 
         try:
-            async for delta, tokens in llm_service.chat_completion_stream(messages):
-                full_reply += delta
-                total_tokens = tokens
-                yield _sse({"type": "chunk", "content": delta})
+            import asyncio as _aio
+            _hb = max(3, int(self.heartbeat_interval))
+            _stopper = _aio.Event()
+
+            async def _heartbeat_sender():
+                """独立心跳协程：即使LLM卡住，也每_hb秒发送一次心跳，避免前端看门狗误杀"""
+                try:
+                    while not _stopper.is_set():
+                        await _aio.sleep(_hb)
+                        if _stopper.is_set():
+                            break
+                        yield _sse({"type": "heartbeat", "ping": True})
+                except _aio.CancelledError:
+                    pass
+
+            hb_task = None
+            try:
+                _queue: _aio.Queue = _aio.Queue()
+
+                async def _drain_llm():
+                    try:
+                        async for delta, tokens in llm_service.chat_completion_stream(messages):
+                            await _queue.put(("chunk", delta, tokens))
+                        await _queue.put(("done", None, None))
+                    except Exception as _e:
+                        await _queue.put(("error", _e, None))
+
+                llm_task = _aio.create_task(_drain_llm())
+
+                while True:
+                    # 每轮循环最多等 _hb 秒，期间若无数据则发送心跳（Python3.10兼容写法）
+                    try:
+                        item = await _aio.wait_for(_queue.get(), timeout=_hb)
+                    except _aio.TimeoutError:
+                        yield _sse({"type": "heartbeat", "ping": True})
+                        continue
+
+                    if item[0] == "chunk":
+                        _, delta, tokens = item
+                        full_reply += delta
+                        total_tokens = tokens
+                        yield _sse({"type": "chunk", "content": delta})
+                    elif item[0] == "done":
+                        break
+                    elif item[0] == "error":
+                        raise item[1]
+                llm_task.result()  # 重新抛异常（如有）
+            finally:
+                _stopper.set()
+                if hb_task and not hb_task.done():
+                    hb_task.cancel()
         except RuntimeError as e:
             err = str(e)
             logger.error(f"[Agent] 流式调用失败: {err}")
             yield _sse({"type": "error", "message": err})
             full_reply = f"抱歉，AI服务出现问题：{err}"
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"
+            logger.exception(f"[Agent] 流式调用异常")
+            yield _sse({"type": "error", "message": err})
+            if not full_reply:
+                full_reply = f"抱歉，AI服务出现问题：{err}"
 
         # 最终写回助手消息
         meta_citations = [{"id": c.id, "key": c.key, "category": c.category} for c in chunks]
