@@ -66,6 +66,9 @@
                 <span><span id="visitor-name">同学</span>的 AI 助手</span>
             </div>
             <div class="chat-header-actions">
+                <button class="btn btn-primary mobile-only" id="btn-toggle-resume" title="查看简历 / 返回聊天">
+                    <span>📋</span> <span class="mobile-toggle-text">查看简历</span>
+                </button>
                 <button class="btn btn-secondary" id="btn-new-chat" title="开启新会话">
                     <span>＋</span> 新会话
                 </button>
@@ -123,5 +126,23 @@
 </div>
 
 <script src="/static/js/chat.js"></script>
+<script>
+(function () {
+  // 移动端 查看简历 / 切换回聊天
+  const btn = document.getElementById('btn-toggle-resume');
+  if (!btn) return;
+  const text = btn.querySelector('.mobile-toggle-text');
+  btn.addEventListener('click', () => {
+    const isShow = document.body.classList.toggle('mobile-show-resume');
+    if (text) text.textContent = isShow ? '返回聊天' : '查看简历';
+    if (isShow) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // 让侧边栏滚动到顶部
+      const side = document.querySelector('.sidebar');
+      if (side) side.scrollTop = 0;
+    }
+  });
+})();
+</script>
 </body>
 </html>

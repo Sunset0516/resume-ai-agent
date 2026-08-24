@@ -641,19 +641,71 @@ html, body {
 /* =========================================================
    响应式
    ========================================================= */
+/* 新功能：分享链接 - 移动端「查看简历」按钮（只在手机显示） */
+.mobile-only { display: none !important; }
+
 @media (max-width: 960px) {
     .app-container {
         grid-template-columns: 1fr;
+        position: relative;
     }
     .sidebar {
         display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+        border-right: none;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.12);
     }
-    .suggestions {
-        grid-template-columns: 1fr;
+    /* body.mobile-show-resume 时，把侧边栏作为整屏简历视图展开 */
+    body.mobile-show-resume .sidebar { display: flex; }
+    body.mobile-show-resume .chat-panel { display: none; }
+
+    .chat-header { padding: 12px 14px; gap: 8px; }
+    .chat-header-title { font-size: 15px; gap: 8px; }
+    .chat-header-title .ai-icon { font-size: 18px; }
+    .chat-header-actions .btn { padding: 6px 10px; font-size: 13px; }
+    .chat-header-actions .btn span:not(.mobile-toggle-text) { font-size: 14px; }
+    .mobile-only { display: inline-flex !important; }
+    .btn-secondary.mobile-only { display: none !important; } /* 确保 .btn-primary.mobile-only才显示 */
+    .chat-header-actions .btn.mobile-only.btn-primary {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 4px;
     }
-    .message-bubble {
-        max-width: 85%;
-    }
+
+    .chat-messages { padding: 12px; }
+    .chat-input-wrap { padding: 8px 10px 14px; }
+    .welcome { padding: 18px 14px; }
+    .welcome h1 { font-size: 20px; }
+    .suggestions { grid-template-columns: 1fr; }
+    .message-bubble { max-width: 85%; }
+    .send-btn { width: 46px; height: 46px; font-size: 18px; }
+    #chat-input { padding: 10px 12px; font-size: 15px; max-height: 140px; }
+
+    /* admin 页的移动端 */
+    .admin-layout { padding: 12px; }
+    .admin-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .form-row { grid-template-columns: 1fr; }
+    .tab-group { flex-wrap: wrap; }
+    .owner-panel input { min-width: 100%; }
+    .owner-panel > div:nth-child(2) { flex-direction: column; align-items: stretch; }
+    .owner-panel > div:nth-child(2) button { width: 100%; justify-content: center; }
+}
+/* 小尺寸手机（≤480px）：进一步压缩 */
+@media (max-width: 480px) {
+    .chat-header-title { font-size: 14px; }
+    .chat-header-title span:nth-child(2) { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-header-actions .btn { padding: 5px 8px; font-size: 12px; }
+    .send-btn { width: 44px; height: 44px; }
+    .topbar { padding: 12px 16px; }
+    .resume-header { padding: 18px 16px; }
+    .resume-avatar { width: 68px; height: 68px; font-size: 26px; }
+    .resume-name { font-size: 18px; }
+    .resume-body { padding: 12px 16px; }
 }
 
 /* 管理员页面样式补充 */

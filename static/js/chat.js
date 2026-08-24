@@ -43,7 +43,27 @@
     // ------------------ 初始化 ------------------
     document.addEventListener('DOMContentLoaded', init);
 
+    // 从分享链接 URL ?owner_key=xxx 读取并写入 localStorage（面试官场景）
+    function applyOwnerFromUrl() {
+        try {
+            const p = new URL(location.href).searchParams.get('owner_key');
+            if (p) {
+                const cleaned = decodeURIComponent(p).trim();
+                if (cleaned && state.ownerKey !== cleaned) {
+                    state.ownerKey = cleaned;
+                    try { localStorage.setItem(OWNER_STORAGE_KEY, cleaned); } catch(e){}
+                    // 写入 Cookie（7天），同域下其他页面保持同一分享身份
+                    try {
+                        document.cookie = 'x_owner_key=' + encodeURIComponent(cleaned)
+                            + '; max-age=604800; path=/; SameSite=Lax';
+                    } catch(e) {}
+                }
+            }
+        } catch (e) { /* ignore malformed URL */ }
+    }
+
     async function init() {
+        applyOwnerFromUrl();
         bindEvents();
         await loadResume();
         autoResize();
