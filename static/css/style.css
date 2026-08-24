@@ -775,3 +775,17 @@ html, body {
     color: var(--text-light);
     font-size: 14px;
 }
+
+/* === 面试官分享链接视图：隐藏管理后台入口 === */
+body.is-share-view .chat-header-actions a.btn[href="/admin"],
+body.is-share-view .chat-header-actions a[href="/admin"] {
+    display: none !important;
+}
+
+/* === 移动端简历面板内的「返回聊天」按钮 === */
+.mobile-back-btn { display: none !important; }
+@media (max-width: 960px) {
+    /* 简历面板展开时显示返回按钮 */
+    body.mobile-show-resume .mobile-back-btn { display: inline-flex !important; }
+    body.mobile-show-resume .topbar .badge-online { display: none; }
+}

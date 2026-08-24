@@ -20,6 +20,9 @@
                     <div class="topbar-subtitle">个人简历智能助手</div>
                 </div>
             </div>
+            <button class="btn btn-primary mobile-only mobile-back-btn" id="btn-back-chat" title="返回聊天" style="display:none;">
+                <span>💬</span> <span>返回聊天</span>
+            </button>
             <span class="badge badge-online"><span class="badge-dot"></span>在线</span>
         </div>
 
@@ -128,20 +131,36 @@
 <script src="/static/js/chat.js"></script>
 <script>
 (function () {
+  // 面试官分享链接场景：URL 带 ?owner_key=xxx 时，隐藏管理后台入口
+  try {
+    const p = new URL(location.href).searchParams.get('owner_key');
+    if (p && p.trim()) {
+      document.body.classList.add('is-share-view');
+    }
+  } catch (e) {}
+
   // 移动端 查看简历 / 切换回聊天
   const btn = document.getElementById('btn-toggle-resume');
-  if (!btn) return;
-  const text = btn.querySelector('.mobile-toggle-text');
-  btn.addEventListener('click', () => {
-    const isShow = document.body.classList.toggle('mobile-show-resume');
-    if (text) text.textContent = isShow ? '返回聊天' : '查看简历';
-    if (isShow) {
+  const backBtn = document.getElementById('btn-back-chat');
+  function toggleResume(show) {
+    document.body.classList.toggle('mobile-show-resume', show);
+    const text = btn && btn.querySelector('.mobile-toggle-text');
+    if (text) text.textContent = show ? '查看简历' : '查看简历';
+    if (backBtn) backBtn.style.display = show ? 'inline-flex' : 'none';
+    if (show) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      // 让侧边栏滚动到顶部
       const side = document.querySelector('.sidebar');
       if (side) side.scrollTop = 0;
+    } else {
+      // 回到聊天时聚焦输入框
+      const inp = document.getElementById('chat-input');
+      if (inp) inp.focus();
     }
+  }
+  if (btn) btn.addEventListener('click', () => {
+    toggleResume(!document.body.classList.contains('mobile-show-resume'));
   });
+  if (backBtn) backBtn.addEventListener('click', () => toggleResume(false));
 })();
 </script>
 </body>
