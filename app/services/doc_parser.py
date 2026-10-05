@@ -102,11 +102,26 @@ class DocParserService:
             logger.error(f"LLM返回JSON解析失败: {e}\n原始内容: {content[:500]}")
             raise RuntimeError("AI解析简历失败，返回的内容不是合法JSON，请重试或手动录入")
 
-        data.setdefault("name", "未命名")
+        # 清洗 null 值：LLM 可能返回 null 但 Pydantic 必填字段不接受
+        if not data.get("name"):
+            data["name"] = "未命名"
         data.setdefault("educations", [])
         data.setdefault("internships", [])
         data.setdefault("projects", [])
         data.setdefault("skills", [])
+        # 清洗子表中必填字段的 null
+        for edu in data["educations"]:
+            if not edu.get("school"):
+                edu["school"] = "未知学校"
+        for intern in data["internships"]:
+            if not intern.get("company"):
+                intern["company"] = "未知公司"
+        for proj in data["projects"]:
+            if not proj.get("name"):
+                proj["name"] = "未知项目"
+        for sk in data["skills"]:
+            if not sk.get("items"):
+                sk["items"] = []
         logger.info(f"[DocParser] LLM解析完成 name={data.get('name')} "
                      f"edu={len(data['educations'])} int={len(data['internships'])} "
                      f"proj={len(data['projects'])} skill={len(data['skills'])}")
