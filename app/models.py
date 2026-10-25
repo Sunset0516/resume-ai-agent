@@ -104,6 +104,8 @@ class Conversation(Base):
     owner_key = Column(String(100), index=True, comment="简历所有者key")
     visitor_id = Column(String(100), index=True, comment="访客ID（用于区分不同用户）")
     title = Column(String(200), comment="会话标题")
+    summary = Column(Text, comment="早期对话摘要（记忆压缩结果）")
+    summary_upto_id = Column(Integer, default=0, comment="摘要已覆盖到的最后一条消息ID")
     is_active = Column(Boolean, default=True, comment="是否活跃")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -126,6 +128,22 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+
+class ResumeChunk(Base):
+    """简历检索片段（结构化分块 + 向量缓存）"""
+    __tablename__ = "resume_chunks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    resume_id = Column(Integer, ForeignKey("resumes.id"), nullable=False, index=True)
+    owner_key = Column(String(100), index=True, comment="所有者标识")
+    chunk_key = Column(String(50), index=True, nullable=False, comment="稳定片段ID，如 edu:3 / proj:7")
+    section = Column(String(50), nullable=False, comment="章节：基本信息/教育经历/实习经历/项目经验/技能")
+    title = Column(String(200), comment="条目名称（学校/公司/项目名）")
+    content = Column(Text, nullable=False, comment="片段正文")
+    embedding = Column(JSON, comment="向量（失败时为空，降级为关键词检索）")
+    resume_version = Column(DateTime, comment="生成该片段时的简历更新时间，用于缓存失效判断")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class MemoryChunk(Base):

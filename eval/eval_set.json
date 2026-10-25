@@ -1,0 +1,42 @@
+{
+  "_comment": "简历检索评测集：expected_sections 为应当命中的简历章节；type=no_answer 表示简历中不存在该信息",
+  "questions": [
+    {"id": 1, "question": "李明的联系方式是什么？", "type": "fact", "expected_sections": ["基本信息"]},
+    {"id": 2, "question": "他什么时候毕业？", "type": "fact", "expected_sections": ["教育经历"]},
+    {"id": 3, "question": "他在哪所大学读书？", "type": "fact", "expected_sections": ["教育经历"]},
+    {"id": 4, "question": "他的 GPA 是多少？", "type": "fact", "expected_sections": ["教育经历"]},
+    {"id": 5, "question": "他在腾讯实习了多久？", "type": "fact", "expected_sections": ["实习经历"]},
+    {"id": 6, "question": "他在腾讯的职位是什么？", "type": "fact", "expected_sections": ["实习经历"]},
+    {"id": 7, "question": "他实习期间优化了什么，效果如何？", "type": "fact", "expected_sections": ["实习经历"]},
+    {"id": 8, "question": "在线简历AI助手用了哪些技术？", "type": "fact", "expected_sections": ["项目经验"]},
+    {"id": 9, "question": "他熟悉哪些编程语言？", "type": "fact", "expected_sections": ["技能"]},
+    {"id": 10, "question": "他会用 Docker 吗？", "type": "fact", "expected_sections": ["技能"]},
+    {"id": 11, "question": "他的求职意向是什么？", "type": "fact", "expected_sections": ["基本信息"]},
+    {"id": 12, "question": "他获得过什么奖学金？", "type": "fact", "expected_sections": ["教育经历"]},
+    {"id": 13, "question": "他在哪个城市实习？", "type": "fact", "expected_sections": ["实习经历"]},
+    {"id": 14, "question": "他的 GitHub 地址是什么？", "type": "fact", "expected_sections": ["基本信息"]},
+    {"id": 15, "question": "他做过哪些项目？", "type": "fact", "expected_sections": ["项目经验"]},
+
+    {"id": 16, "question": "他有没有做过大模型相关的产品？", "type": "semantic", "expected_sections": ["项目经验"]},
+    {"id": 17, "question": "他的后端开发能力怎么样？", "type": "semantic", "expected_sections": ["实习经历", "技能"]},
+    {"id": 18, "question": "他做过后端性能优化吗？", "type": "semantic", "expected_sections": ["实习经历"]},
+    {"id": 19, "question": "有没有接口或者服务端开发经验？", "type": "semantic", "expected_sections": ["实习经历"]},
+    {"id": 20, "question": "他算全栈工程师吗？", "type": "semantic", "expected_sections": ["技能", "项目经验"]},
+    {"id": 21, "question": "他平时用哪些数据库？", "type": "semantic", "expected_sections": ["技能"]},
+    {"id": 22, "question": "有没有独立负责一个项目的经历？", "type": "semantic", "expected_sections": ["项目经验"]},
+    {"id": 23, "question": "他做过流式接口吗？", "type": "semantic", "expected_sections": ["项目经验"]},
+    {"id": 24, "question": "跨会话记忆是怎么实现的？", "type": "semantic", "expected_sections": ["项目经验"]},
+    {"id": 25, "question": "他是计算机相关专业吗？", "type": "semantic", "expected_sections": ["教育经历"]},
+
+    {"id": 26, "question": "他实习的公司和岗位分别是什么？", "type": "multi", "expected_sections": ["实习经历"]},
+    {"id": 27, "question": "他的项目里用到 Redis 吗？", "type": "multi", "expected_sections": ["项目经验"]},
+    {"id": 28, "question": "他掌握的技术里哪些是后端框架？", "type": "multi", "expected_sections": ["技能"]},
+    {"id": 29, "question": "他硕士期间的成绩和荣誉如何？", "type": "multi", "expected_sections": ["教育经历"]},
+    {"id": 30, "question": "他的教育背景和实习经历分别是什么？", "type": "multi", "expected_sections": ["教育经历", "实习经历"]},
+
+    {"id": 31, "question": "他带过几个人？", "type": "no_answer", "expected_sections": []},
+    {"id": 32, "question": "他的期望薪资是多少？", "type": "no_answer", "expected_sections": []},
+    {"id": 33, "question": "他会日语吗？", "type": "no_answer", "expected_sections": []},
+    {"id": 34, "question": "他发表过论文吗？", "type": "no_answer", "expected_sections": []}
+  ]
+}

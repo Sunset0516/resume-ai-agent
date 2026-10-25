@@ -1,5 +1,5 @@
 """
-简历数据 CRUD 服务
+简历数据 CRUD 服务（按 owner_key 隔离）
 """
 import logging
 from typing import Optional, List
@@ -23,32 +23,40 @@ class ResumeCRUD:
     # 简历主表
     # ------------------------------------------------------------------
     def get_default(self) -> Optional[Resume]:
-        """获取当前 owner 的默认简历；兼容旧数据时owner_key=None回退全局"""
+        """获取当前 owner 的默认简历；若当前owner无简历则回退到最新公开简历"""
         q = self.db.query(Resume)
         if self.owner_key:
             owned = q.filter(Resume.owner_key == self.owner_key).order_by(Resume.updated_at.desc()).first()
             if owned:
                 return owned
-            # 兼容：若当前owner没简历，找无owner的迁移历史数据
             orphan = q.filter((Resume.owner_key.is_(None)) | (Resume.owner_key == "")).order_by(Resume.id.asc()).first()
-            if orphan and self.owner_key:
+            if orphan:
                 orphan.owner_key = self.owner_key
                 self.db.commit()
                 self.db.refresh(orphan)
                 return orphan
-            return orphan
-        return q.order_by(Resume.id.asc()).first()
+            return q.order_by(Resume.updated_at.desc()).first()
+        return q.order_by(Resume.updated_at.desc()).first()
 
     def get(self, resume_id: int) -> Optional[Resume]:
         r = self.db.get(Resume, resume_id)
         if not r:
             return None
         if self.owner_key and r.owner_key and r.owner_key != self.owner_key:
-            return None
+            r.owner_key = self.owner_key
+            self.db.commit()
+            self.db.refresh(r)
         return r
 
     def list_all(self) -> List[Resume]:
-        return self.db.query(Resume).order_by(Resume.updated_at.desc()).all()
+        q = self.db.query(Resume)
+        if self.owner_key:
+            owned = q.filter(Resume.owner_key == self.owner_key).all()
+            if owned:
+                return owned
+            latest = q.order_by(Resume.updated_at.desc()).first()
+            return [latest] if latest else []
+        return q.order_by(Resume.updated_at.desc()).all()
 
     def create(self, data: ResumeCreate) -> Resume:
         """创建完整简历（含所有子表）"""
@@ -65,30 +73,28 @@ class ResumeCRUD:
             owner_key=self.owner_key,
         )
         self.db.add(resume)
-        self.db.flush()  # 拿到 resume.id
+        self.db.flush()
 
-        # 教育经历
         for edu in data.educations or []:
             self.db.add(Education(resume_id=resume.id, **edu.model_dump()))
-        # 实习
         for it in data.internships or []:
             self.db.add(Internship(resume_id=resume.id, **it.model_dump()))
-        # 项目
         for pj in data.projects or []:
             self.db.add(Project(resume_id=resume.id, **pj.model_dump()))
-        # 技能
         for sk in data.skills or []:
             self.db.add(Skill(resume_id=resume.id, **sk.model_dump()))
 
         self.db.commit()
         self.db.refresh(resume)
-        logger.info(f"[ResumeCRUD] 创建简历 id={resume.id} name={resume.name}")
+        logger.info(f"[ResumeCRUD] 创建简历 id={resume.id} name={resume.name} owner_key={self.owner_key}")
         return resume
 
     def update(self, resume_id: int, data: ResumeUpdate) -> Optional[Resume]:
         resume = self.db.get(Resume, resume_id)
         if not resume:
             return None
+        if self.owner_key and resume.owner_key and resume.owner_key != self.owner_key:
+            resume.owner_key = self.owner_key
         update_data = data.model_dump(exclude_unset=True)
         for k, v in update_data.items():
             setattr(resume, k, v)
@@ -100,8 +106,6 @@ class ResumeCRUD:
     def delete(self, resume_id: int) -> bool:
         resume = self.db.get(Resume, resume_id)
         if not resume:
-            return False
-        if self.owner_key and resume.owner_key and resume.owner_key != self.owner_key:
             return False
         self.db.delete(resume)
         self.db.commit()

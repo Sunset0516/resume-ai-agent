@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 
 from .llm_service import llm_service
 from .memory_service import MemoryService
+from .rag_service import ResumeRAGService, is_broad_question
 from .resume_crud import ResumeCRUD
+from ..config import settings
 from ..models import Resume
 
 logger = logging.getLogger(__name__)
@@ -42,6 +44,11 @@ SYSTEM_PROMPT_TEMPLATE = """你是「{name}」的私人简历 AI 助手。面试
 ```
 {memory_text}
 ```
+
+## 历史对话摘要（若与当前问题相关，请结合使用）
+```
+{history_summary}
+```
 """
 
 
@@ -58,15 +65,36 @@ class ResumeAgentService:
     # ------------------------------------------------------------------
     # 辅助：准备上下文
     # ------------------------------------------------------------------
-    def _prepare_context(self, user_msg: str, resume: Optional[Resume] = None):
+    def _prepare_context(self, user_msg: str, conv, resume: Optional[Resume] = None):
         """
         准备 LLM 上下文：
-        1. 取默认简历或指定简历 -> 序列化为文本
-        2. 根据用户问题检索长期记忆块
+        1. 概览类问题注入完整简历；具体问题走片段检索（向量优先，失败降级关键词）
+        2. 检索长期记忆
+        3. 带上滚动摘要，避免长对话丢失早期信息
+        返回: (system_prompt, resume, memory_chunks, citations, retrieval_mode)
         """
         if resume is None:
             resume = self.crud.get_default()
-        resume_text = self.crud.dump_resume_text(resume) if resume else "（暂无简历数据，请先在后台录入简历）"
+
+        citations = []
+        retrieval_mode = "none"
+        full_text = self.crud.dump_resume_text(resume) if resume else "（暂无简历数据，请先在后台录入简历）"
+        resume_text = full_text
+
+        if resume and settings.RAG_ENABLED and not is_broad_question(user_msg):
+            rag = ResumeRAGService(self.db, owner_key=self.owner_key)
+            hits, mode = rag.search(user_msg, resume)
+            if hits:
+                resume_text = rag.format_context(hits)
+                citations = rag.to_citations(hits)
+                retrieval_mode = mode
+                logger.info(f"[Agent] 简历片段检索 mode={mode} hits={len(hits)}")
+            else:
+                retrieval_mode = "full_fallback"
+                logger.info("[Agent] 简历片段无命中，回退完整简历")
+        elif resume:
+            retrieval_mode = "full"
+            citations = [{"source": "resume", "section": "完整简历", "title": resume.name}]
 
         # 搜索长期记忆
         chunks = self.memory.search_chunks(user_msg, top_k=6)
@@ -74,15 +102,24 @@ class ResumeAgentService:
         for i, ch in enumerate(chunks, 1):
             label = f"[{ch.category}]" if ch.category else ""
             memory_lines.append(f"{i}. {label} {ch.content}")
+            citations.append({
+                "source": "memory",
+                "section": ch.category or "长期记忆",
+                "title": ch.key or "",
+            })
         memory_text = "\n".join(memory_lines) if memory_lines else "（无相关长期记忆）"
+
+        # 滚动摘要（超过阈值才触发压缩）
+        summary_text = self.memory.maybe_compress(conv) or "（无）"
 
         name = resume.name if resume else "求职者"
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
             name=name,
             resume_text=resume_text,
             memory_text=memory_text,
+            history_summary=summary_text,
         )
-        return system_prompt, resume, chunks
+        return system_prompt, resume, chunks, citations, retrieval_mode
 
     # ------------------------------------------------------------------
     # 主流程：非流式
@@ -102,8 +139,8 @@ class ResumeAgentService:
         conv = self.memory.get_or_create_conversation(session_id, visitor_id=visitor_id)
 
         # 2. 准备上下文 + 历史消息
-        system_prompt, resume_obj, chunks = self._prepare_context(message, resume)
-        history = self.memory.build_history_context(conv.session_id, limit=10)
+        system_prompt, resume_obj, chunks, citations, _mode = self._prepare_context(message, conv, resume)
+        history = self.memory.build_history_context(conv.session_id)
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
@@ -118,12 +155,11 @@ class ResumeAgentService:
             tokens = 0
 
         # 4. 写入记忆
-        meta_citations = [{"id": c.id, "key": c.key, "category": c.category} for c in chunks]
         self.memory.add_message(conv.id, "user", message)
         self.memory.add_message(
             conv.id, "assistant", reply,
             tokens_used=tokens,
-            meta={"citations": meta_citations, "resume_id": resume_obj.id if resume_obj else None},
+            meta={"citations": citations, "resume_id": resume_obj.id if resume_obj else None},
         )
 
         return {
@@ -131,7 +167,7 @@ class ResumeAgentService:
             "session_id": conv.session_id,
             "conversation_id": conv.id,
             "tokens_used": tokens,
-            "citations": [c.key or c.category for c in chunks if c.key or c.category],
+            "citations": citations,
         }
 
     # ------------------------------------------------------------------
@@ -158,14 +194,12 @@ class ResumeAgentService:
         # 先写入用户消息
         self.memory.add_message(conv.id, "user", message)
 
-        system_prompt, resume_obj, chunks = self._prepare_context(message, resume)
-        history = self.memory.build_history_context(conv.session_id, limit=10)
+        system_prompt, resume_obj, chunks, citations, retrieval_mode = self._prepare_context(message, conv, resume)
+        history = self.memory.build_history_context(conv.session_id)
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(history)
         messages.append({"role": "user", "content": message})
-
-        citations = [c.key or c.category for c in chunks if c.key or c.category]
 
         def _sse(data: dict) -> str:
             return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -174,6 +208,7 @@ class ResumeAgentService:
             "type": "start",
             "session_id": conv.session_id,
             "conversation_id": conv.id,
+            "retrieval_mode": retrieval_mode,
             "citations": citations,
         })
 
@@ -245,11 +280,11 @@ class ResumeAgentService:
                 full_reply = f"抱歉，AI服务出现问题：{err}"
 
         # 最终写回助手消息
-        meta_citations = [{"id": c.id, "key": c.key, "category": c.category} for c in chunks]
         self.memory.add_message(
             conv.id, "assistant", full_reply,
             tokens_used=total_tokens,
-            meta={"citations": meta_citations, "resume_id": resume_obj.id if resume_obj else None},
+            meta={"citations": citations, "retrieval_mode": retrieval_mode,
+                  "resume_id": resume_obj.id if resume_obj else None},
         )
 
         yield _sse({

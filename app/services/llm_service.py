@@ -135,6 +135,9 @@ class LLMService:
         }
         if max_tokens:
             payload["max_tokens"] = max_tokens
+        # 兼容 OpenAI 的服务端默认不返回 usage，需显式声明；关闭后 token 统计将不可用
+        if getattr(settings, "LLM_STREAM_USAGE", True):
+            payload["stream_options"] = {"include_usage": True}
         logger.info(f"[{request_id}] LLM流式请求 | model={self.model} | first_chunk_timeout={self.first_chunk_timeout}s | stream_timeout={self.stream_timeout}s")
         total_tokens = 0
         full_content = ""
@@ -210,12 +213,15 @@ class LLMService:
                             except json.JSONDecodeError:
                                 continue
                             try:
-                                delta = obj["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
+                                # 最后一个 chunk 可能只有 usage、没有 choices，先解析 usage 再取内容
                                 usage = obj.get("usage")
                                 if usage:
                                     total_tokens = usage.get("total_tokens", total_tokens)
-                            except (KeyError, IndexError):
+                                choices = obj.get("choices") or []
+                                if not choices:
+                                    continue
+                                content = (choices[0].get("delta") or {}).get("content") or ""
+                            except (KeyError, IndexError, TypeError):
                                 continue
                             if content:
                                 full_content += content
@@ -257,6 +263,10 @@ class LLMService:
                 await asyncio.sleep(wait_s)
         else:
             raise RuntimeError(last_err or "LLM流式请求失败")
+
+        # usage 通常在最后一个 chunk（无正文），这里补发一次空增量，把最终 token 数带给调用方
+        if total_tokens:
+            yield "", total_tokens
 
         logger.info(f"[{request_id}] 流式结束 | 长度={len(full_content)} | tokens={total_tokens}")
 

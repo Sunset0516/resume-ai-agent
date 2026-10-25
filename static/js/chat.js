@@ -26,7 +26,23 @@
         if (state.ownerKey) h['X-Owner-Key'] = state.ownerKey;
         return h;
     }
+    // 基础路径：从 window.ROOT_PATH 读取，或从 URL 自动检测（容错：即使 index.html 没设置也能工作）
+    const BASE_PATH = (window.ROOT_PATH || (function() {
+        const m = location.pathname.match(/^(\/[^/]+)/);
+        return m ? m[1] : '';
+    })()).replace(/\/$/, '');
+
+    function _applyBasePath(url) {
+        // 只对以 / 开头的相对路径加前缀，已经是完整 URL 的不动
+        if (typeof url !== 'string') return url;
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        if (url.startsWith(BASE_PATH + '/')) return url;  // 已加过前缀
+        if (url.startsWith('/')) return BASE_PATH + url;
+        return url;
+    }
+
     function addOwnerQuery(url) {
+        url = _applyBasePath(url);  // 先加 BASE_PATH 前缀
         if (!state.ownerKey) return url;
         const sep = url.indexOf('?') >= 0 ? '&' : '?';
         return url + sep + 'owner_key=' + encodeURIComponent(state.ownerKey);
@@ -228,6 +244,8 @@
         const msg = inputEl.value.trim();
         if (!msg || state.loading) return;
         hideWelcome();
+        // 用户发送新消息：重置滚动锁定，期望看到 AI 回答
+        _userScrolledUp = false;
         appendMessage('user', msg);
         inputEl.value = '';
         autoResize();
@@ -284,7 +302,43 @@
         if (welcomeEl) welcomeEl.style.display = 'none';
     }
 
+    // 用户主动滚动检测：用 wheel/touchmove（程序设置 scrollTop 不会触发这些事件）
+    let _userScrolledUp = false;
+    let _userInteractedTs = 0;
+
+    function _isAtBottom() {
+        return chatMessagesEl.scrollHeight - chatMessagesEl.scrollTop - chatMessagesEl.clientHeight < 80;
+    }
+
+    // 鼠标滚轮：用户主动滚动检测
+    chatMessagesEl.addEventListener('wheel', (e) => {
+        _userInteractedTs = Date.now();
+        if (e.deltaY < 0) {
+            // 向上滚动：若不在底部附近，标记为用户主动向上
+            if (!_isAtBottom()) _userScrolledUp = true;
+        } else if (e.deltaY > 0) {
+            // 向下滚动：若已接近底部，取消锁定
+            if (_isAtBottom()) _userScrolledUp = false;
+        }
+    }, { passive: true });
+
+    // 触摸设备：滑动检测
+    let _touchStartY = 0;
+    chatMessagesEl.addEventListener('touchstart', (e) => {
+        _touchStartY = e.touches[0]?.clientY || 0;
+        _userInteractedTs = Date.now();
+    }, { passive: true });
+    chatMessagesEl.addEventListener('touchmove', () => {
+        _userInteractedTs = Date.now();
+        if (!_isAtBottom()) _userScrolledUp = true;
+        else _userScrolledUp = false;
+    }, { passive: true });
+    chatMessagesEl.addEventListener('touchend', () => {
+        if (_isAtBottom()) _userScrolledUp = false;
+    }, { passive: true });
+
     function scrollBottom() {
+        if (_userScrolledUp) return;
         requestAnimationFrame(() => {
             chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
         });
@@ -300,8 +354,11 @@
 
         try {
             let streamDone = false;
-            let lastDataTs = Date.now();
-            const streamTimeoutMs = 60_000;  // 60s 无任何SSE事件判定超时
+            let lastDataTs = Date.now();      // 任意事件（含心跳）时间，用于判断连接是否存活
+            let lastContentTs = Date.now();   // 最后一次收到正文内容的时间
+            let started = false;
+            const CONNECT_TIMEOUT_MS = 30_000;  // 30s 收不到任何事件 → 连接问题
+            const CONTENT_TIMEOUT_MS = 60_000;  // 60s 只有心跳没有正文 → 上游 LLM 卡住
             const resp = await fetch(addOwnerQuery('/api/chat/stream'), {
                 method: 'POST',
                 headers: authHeaders(),
@@ -325,15 +382,24 @@
             let assistantText = '';
             let hbCount = 0;
 
+            const abortStream = (msg) => {
+                if (streamDone) return;
+                streamDone = true;
+                clearInterval(watchdog);
+                if (!assistantBubble) assistantBubble = appendMessage('assistant', '');
+                assistantBubble.textContent = assistantText + (assistantText ? '\n\n' : '') + '⚠ ' + msg;
+                scrollBottom();
+                try { reader.cancel(); } catch (e) {}
+            };
+
             const watchdog = setInterval(() => {
                 if (streamDone) { clearInterval(watchdog); return; }
-                if (Date.now() - lastDataTs > streamTimeoutMs) {
-                    clearInterval(watchdog);
-                    const msg = 'LLM流式响应超时（超过60秒无数据）。请重试或检查网络。';
-                    if (!assistantBubble) assistantBubble = appendMessage('assistant', '');
-                    assistantBubble.textContent = assistantText + (assistantText ? '\n\n' : '') + '⚠ ' + msg;
-                    scrollBottom();
-                    reader.cancel().catch(()=>{});
+                // 注意：心跳会不断刷新 lastDataTs，所以"无正文"必须单独计时，
+                // 否则服务端一直发心跳时前端永远等不到超时（曾导致气泡转圈数分钟）
+                if (!started && Date.now() - lastDataTs > CONNECT_TIMEOUT_MS) {
+                    abortStream('连接超时：30 秒内没有收到服务端响应，请稍后重试。');
+                } else if (started && Date.now() - lastContentTs > CONTENT_TIMEOUT_MS) {
+                    abortStream('AI 响应超时：60 秒内没有返回新内容，已停止等待。请稍后重试。');
                 }
             }, 2000);
 
@@ -358,9 +424,15 @@
 
                     if (evt.type === 'start') {
                         state.sessionId = evt.session_id;
+                        started = true;
+                        lastContentTs = Date.now();
+                        // AI 开始回答：重置滚动锁定，让用户能看到流式输出
+                        _userScrolledUp = false;
                         assistantBubble = appendMessage('assistant', '');
+                        scrollBottom();
                     } else if (evt.type === 'chunk') {
                         assistantText += evt.content;
+                        lastContentTs = Date.now();
                         if (assistantBubble) assistantBubble.textContent = assistantText;
                         scrollBottom();
                     } else if (evt.type === 'heartbeat') {
@@ -386,7 +458,8 @@
             state.loading = false;
             sendBtnEl.disabled = false;
             inputEl.focus();
-            scrollBottom();
+            // 不重置 _userScrolledUp，也不强制 scrollBottom
+            // 保留用户当前的滚动位置（避免AI回答后强行拉回底部，让用户能看上下文）
         }
     }
 

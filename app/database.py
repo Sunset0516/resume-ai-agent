@@ -52,6 +52,8 @@ def _run_sqlite_migrations():
         ("resumes", "owner_key", "ALTER TABLE resumes ADD COLUMN owner_key VARCHAR(100)"),
         ("memory_chunks", "owner_key", "ALTER TABLE memory_chunks ADD COLUMN owner_key VARCHAR(100)"),
         ("conversations", "owner_key", "ALTER TABLE conversations ADD COLUMN owner_key VARCHAR(100)"),
+        ("conversations", "summary", "ALTER TABLE conversations ADD COLUMN summary TEXT"),
+        ("conversations", "summary_upto_id", "ALTER TABLE conversations ADD COLUMN summary_upto_id INTEGER DEFAULT 0"),
     ]
     with engine.connect() as conn:
         for table, col, sql in migrations:

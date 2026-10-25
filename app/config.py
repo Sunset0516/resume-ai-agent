@@ -20,9 +20,24 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: int = 120
     LLM_STREAM_TIMEOUT: int = 180
     LLM_FIRST_CHUNK_TIMEOUT: int = 30
-    LLM_RETRY: int = 2
+    LLM_RETRY: int = 1          # 重试次数：与空闲超时叠加会放大总耗时，默认只重试 1 次
     LLM_TEMPERATURE: float = 0.7
+    LLM_STREAM_USAGE: bool = True  # 流式请求是否要求服务端返回 usage（用于准确统计 token）
     SSE_HEARTBEAT_INTERVAL: int = 15
+
+    # ---------- Embedding / 检索配置 ----------
+    EMBEDDING_API_KEY: str = ""       # 留空则复用 LLM_API_KEY
+    EMBEDDING_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+    EMBEDDING_MODEL: str = "embedding-3"
+    EMBEDDING_DIM: int = 1024
+    RAG_ENABLED: bool = True
+    RAG_TOP_K: int = 4
+    RAG_MIN_SCORE: float = 0.30
+
+    # ---------- 记忆压缩配置 ----------
+    HISTORY_LIMIT: int = 10
+    HISTORY_SUMMARY_TRIGGER: int = 12   # 未摘要消息超过该数量时触发压缩
+    HISTORY_KEEP_RECENT: int = 6        # 压缩后保留的最近消息条数
 
     # ---------- 服务配置 ----------
     HOST: str = "0.0.0.0"

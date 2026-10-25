@@ -52,6 +52,9 @@ from .api import chat as chat_router
 from .api import resume as resume_router
 from .api import memory as memory_router
 
+# 从环境变量获取根路径（Nginx 反向代理时使用）
+ROOT_PATH = os.environ.get("ROOT_PATH", "")
+
 # ---------- 日志 ----------
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
@@ -68,9 +71,10 @@ async def lifespan(app: FastAPI):
     init_db()
     logger.info("=" * 50)
     logger.info("  简历 AI Agent 服务已启动")
-    logger.info(f"  访问地址: http://{settings.HOST}:{settings.PORT}")
-    logger.info(f"  管理后台: http://{settings.HOST}:{settings.PORT}/admin")
-    logger.info(f"  API 文档: http://{settings.HOST}:{settings.PORT}/docs")
+    logger.info(f"  根路径: {ROOT_PATH or '/'}")
+    logger.info(f"  访问地址: http://{settings.HOST}:{settings.PORT}{ROOT_PATH}/")
+    logger.info(f"  管理后台: http://{settings.HOST}:{settings.PORT}{ROOT_PATH}/admin")
+    logger.info(f"  API 文档: http://{settings.HOST}:{settings.PORT}{ROOT_PATH}/docs")
     logger.info(f"  LLM 模型: {settings.LLM_MODEL} ({settings.LLM_BASE_URL})")
     logger.info(f"  数据库:   {settings.DATABASE_URL}")
     if not settings.LLM_API_KEY or settings.LLM_API_KEY.startswith("your_"):
@@ -86,6 +90,10 @@ app = FastAPI(
     description="支持 API 调用、持久记忆、可上线部署的简历问答网站",
     version="1.0.0",
     lifespan=lifespan,
+    root_path=ROOT_PATH,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # 1) OwnerMiddleware 必须放在最外层（比CORSMiddleware先执行），
@@ -107,6 +115,7 @@ if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+templates.env.globals["root_path"] = ROOT_PATH
 
 
 # ---------- API Key 验证（可选） ----------
@@ -122,13 +131,13 @@ async def verify_api_secret(request: Request):
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index_page(request: Request):
     """前台：简历 + 聊天页面"""
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"root_path": ROOT_PATH})
 
 
 @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
 async def admin_page(request: Request):
     """后台：简历编辑 + 记忆管理"""
-    return templates.TemplateResponse(request, "admin.html")
+    return templates.TemplateResponse(request, "admin.html", {"root_path": ROOT_PATH})
 
 
 @app.get("/health", summary="健康检查")

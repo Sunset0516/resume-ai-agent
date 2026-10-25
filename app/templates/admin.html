@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>简历管理后台 · Resume AI Agent</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
 <style>
 body { background: var(--bg); }
 .admin-nav { display:flex; gap:10px; }
@@ -34,65 +34,10 @@ body { background: var(--bg); }
     max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all;
 }
 </style>
-
-<script>
-(function(){
-  const KEY = 'resume_owner_key';
-  window.__ownerState = {
-    get: () => localStorage.getItem(KEY) || '',
-    set: (v) => {
-      if (!v) localStorage.removeItem(KEY);
-      else localStorage.setItem(KEY, v);
-    },
-  };
-  // 每次页面请求都带 X-Owner-Key
-  const _origFetch = window.fetch;
-  window.fetch = function(url, opts={}) {
-    if (!opts.headers) opts.headers = {};
-    const hdrs = new Headers(opts.headers || {});
-    const ok = window.__ownerState.get();
-    if (ok) hdrs.set('X-Owner-Key', ok);
-    opts.headers = hdrs;
-    return _origFetch.call(this, url, opts).then((r) => {
-      const h = r.headers.get('X-Owner-Key');
-      if (h && h !== window.__ownerState.get()) window.__ownerState.set(h);
-      return r;
-    });
-  };
-})();
-</script>
-
 </head>
 <body>
 
 <div class="admin-layout">
-
-<div class="owner-panel" style="margin:12px 0;padding:10px 14px;background:#f8fafc;border:1px solid #dbeafe;border-radius:10px;font-size:13px;color:#1e3a8a;">
-  <div style="font-weight:600;margin-bottom:6px;">👤 Owner 隔离（多用户）</div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <input id="owner-key-input" type="text" placeholder="owner_key（留空自动生成）" style="flex:1;min-width:220px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;">
-    <button class="btn btn-primary" onclick="applyOwner()">应用 / 切换</button>
-    <button class="btn" onclick="newOwner()">新建（清除，自动生成新）</button>
-    <button class="btn" onclick="copyOwner()" title="复制当前owner_key">复制</button>
-  </div>
-  <div id="owner-status" style="margin-top:6px;color:#334155;"></div>
-</div>
-<div class="owner-panel" style="margin:12px 0;padding:12px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;font-size:13px;color:#065f46;">
-  <div style="font-weight:600;margin-bottom:8px;">🎯 面试官分享链接（访客无需登录，打开直接看你的简历并问答）</div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <input id="share-link-input" type="text" readonly placeholder="点「生成链接」按钮 → 生成你专属的公开访问URL" style="flex:1;min-width:260px;padding:6px 10px;border:1px solid #6ee7b7;border-radius:6px;background:white;color:#111827;">
-    <button class="btn btn-primary" onclick="generateShareLink()" style="background:#059669;border-color:#059669;">🔗 生成链接</button>
-    <button class="btn" onclick="copyShareLink()">📋 复制</button>
-    <button class="btn" onclick="testShareLink()">🌐 新窗口打开测试</button>
-  </div>
-  <div id="share-tip" style="margin-top:8px;color:#047857;line-height:1.7;">
-    · 点击「生成链接」→ 自动把当前 owner_key 绑定到 URL，再点「复制」或「🌐」直接发给面试官即可；<br>
-    · 面试官手机打开就能看到你的完整简历并向 AI 提问教育/实习/项目等细节；<br>
-    · 建议先生成一个好记的 owner_key（如 zhang_resume_v1），再「应用/切换」→保存简历→点「生成链接」。
-  </div>
-</div>
-
-
 
     <div class="admin-header">
         <div>
@@ -102,7 +47,7 @@ body { background: var(--bg); }
             </div>
         </div>
         <div class="admin-nav">
-            <a href="/" class="btn btn-secondary">← 返回前台</a>
+            <a href="{{ url_for('index_page') }}" class="btn btn-secondary">← 返回前台</a>
             <a href="/docs" class="btn btn-secondary" target="_blank">API文档</a>
         </div>
     </div>
@@ -646,75 +591,6 @@ body { background: var(--bg); }
         }
     };
 
-
-    window.ownerInit = function () {
-        const v = window.__ownerState.get();
-        const el = document.getElementById('owner-key-input');
-        const st = document.getElementById('owner-status');
-        if (!el || !st) return;
-        el.value = v || '';
-        st.textContent = v ? ('当前 owner_key = ' + v + ' （此浏览器下的所有简历/记忆/会话都与它绑定）') : '未设置：下次请求服务器将自动生成 owner_key 并写入本地';
-    };
-    window.applyOwner = function () {
-        const el = document.getElementById('owner-key-input');
-        const v = (el.value || '').trim();
-        window.__ownerState.set(v);
-        window.ownerInit();
-        location.reload();
-    };
-    window.newOwner = function () {
-        window.__ownerState.set('');
-        document.getElementById('owner-key-input').value = '';
-        window.ownerInit();
-        location.reload();
-    };
-    window.copyOwner = async function () {
-        const v = window.__ownerState.get();
-        if (!v) return toast('当前未设置 owner_key', 'error');
-        try { await navigator.clipboard.writeText(v); toast('已复制: ' + v, 'success'); }
-        catch (e) { toast('复制失败', 'error'); }
-    };
-
-    // ---------- 分享链接 ----------
-    window.buildShareUrl = async function () {
-        let v = window.__ownerState.get();
-        if (!v) {
-            // 服务器端还没给前端分配 owner_key 的话，触发一次请求来生成它
-            try {
-                const r = await fetch('/api/resume', { headers: ownerHeaders() });
-                const k = r.headers.get('X-Owner-Key');
-                if (k) { window.__ownerState.set(k); v = k; window.ownerInit(); }
-            } catch (e) {}
-        }
-        if (!v) return null;
-        // 使用当前页面 host（优先 https 部署域名）
-        const proto = location.protocol;
-        const host  = location.host; // includes port if non-default
-        return `${proto}//${host}/?owner_key=${encodeURIComponent(v)}`;
-    };
-    window.generateShareLink = async function () {
-        const url = await window.buildShareUrl();
-        const el = document.getElementById('share-link-input');
-        const tip = document.getElementById('share-tip');
-        if (!el) return;
-        if (!url) { tip.textContent = '❌ 还没有 owner_key，请先「新建」或「应用/切换」一个再生成'; tip.style.color='#b91c1c'; return; }
-        el.value = url;
-        tip.style.color='#047857';
-        tip.textContent = '✅ 已生成：' + url + '  （点「复制」后粘贴到微信/邮件）';
-    };
-    window.copyShareLink = async function () {
-        const el = document.getElementById('share-link-input');
-        if (!el || !el.value) { await window.generateShareLink(); if (!el.value) return; }
-        try { await navigator.clipboard.writeText(el.value); toast('分享链接已复制到剪贴板', 'success'); }
-        catch (e) { toast('复制失败：' + e.message, 'error'); el.select(); document.execCommand('copy'); toast('已复制', 'success'); }
-    };
-    window.testShareLink = async function () {
-        const el = document.getElementById('share-link-input');
-        if (!el || !el.value) await window.generateShareLink();
-        if (el.value) window.open(el.value, '_blank', 'noopener');
-    };
-    document.addEventListener('DOMContentLoaded', window.ownerInit);
-
     window.loadSample = async function () {
         if (!confirm('会覆盖当前简历基本信息（不会删除已有经历子项，需要手动删除），继续？')) return;
         const sample = {
@@ -787,5 +663,6 @@ body { background: var(--bg); }
     }
 })();
 </script>
+<script>window.ROOT_PATH = "{{ root_path }}"; const _fetch = window.fetch; window.fetch = function(url, options) { if (typeof url === "string" && url.startsWith("/")) { url = (window.ROOT_PATH || "") + url; } return _fetch.call(this, url, options); };</script>
 </body>
 </html>

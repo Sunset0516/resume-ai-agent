@@ -209,7 +209,7 @@ class ChatResponse(BaseModel):
     session_id: str
     conversation_id: int
     tokens_used: int = 0
-    citations: Optional[List[str]] = Field(None, description="引用的简历片段标签")
+    citations: Optional[List[Dict[str, Any]]] = Field(None, description="引用来源：简历章节 / 长期记忆")
 
 
 class MemoryChunkBase(BaseModel):

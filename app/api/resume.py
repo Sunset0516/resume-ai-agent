@@ -89,7 +89,8 @@ def add_education(resume_id: int, edu: EducationCreate, owner_key: str = Depends
     e = crud.add_education(resume_id, edu)
     if not e:
         raise HTTPException(status_code=404, detail="简历不存在")
-    return ApiResponse(data=e, message="教育经历已添加")
+    from ..schemas import Education as EducationSchema
+    return ApiResponse(data=EducationSchema.model_validate(e).model_dump(), message="教育经历已添加")
 
 
 @router.post("/{resume_id}/internship", response_model=ApiResponse)
@@ -99,7 +100,8 @@ def add_internship(resume_id: int, it: InternshipCreate, owner_key: str = Depend
     r = crud.add_internship(resume_id, it)
     if not r:
         raise HTTPException(status_code=404, detail="简历不存在")
-    return ApiResponse(data=r, message="实习经历已添加")
+    from ..schemas import Internship as InternshipSchema
+    return ApiResponse(data=InternshipSchema.model_validate(r).model_dump(), message="实习经历已添加")
 
 
 @router.post("/{resume_id}/project", response_model=ApiResponse)
@@ -109,7 +111,8 @@ def add_project(resume_id: int, pj: ProjectCreate, owner_key: str = Depends(get_
     r = crud.add_project(resume_id, pj)
     if not r:
         raise HTTPException(status_code=404, detail="简历不存在")
-    return ApiResponse(data=r, message="项目经验已添加")
+    from ..schemas import Project as ProjectSchema
+    return ApiResponse(data=ProjectSchema.model_validate(r).model_dump(), message="项目经验已添加")
 
 
 @router.post("/{resume_id}/skill", response_model=ApiResponse)
@@ -119,7 +122,8 @@ def add_skill(resume_id: int, sk: SkillCreate, owner_key: str = Depends(get_owne
     r = crud.add_skill(resume_id, sk)
     if not r:
         raise HTTPException(status_code=404, detail="简历不存在")
-    return ApiResponse(data=r, message="技能已添加")
+    from ..schemas import Skill as SkillSchema
+    return ApiResponse(data=SkillSchema.model_validate(r).model_dump(), message="技能已添加")
 
 
 @router.get("/export/text", response_model=ApiResponse)
@@ -184,15 +188,15 @@ async def upload_resume_file(
         logger.exception("create resume from upload failed")
         raise HTTPException(status_code=400, detail=f"解析成功但创建简历失败: {e}")
 
+    # 用 Pydantic schema 序列化 SQLAlchemy 对象，避免 json.dumps 遇到 ORM 对象崩溃
+    from fastapi.responses import JSONResponse
+    from ..schemas import Resume as ResumeSchema
+    resume_schema = ResumeSchema.model_validate(resume)
     resp = ApiResponse(
-        data=resume,
+        data=resume_schema,
         message=f"简历解析成功！从 {file.filename} 提取了 {len(text)} 字符",
     )
-    # 写回 X-Owner-Key 响应头，方便前端持久化
-    from fastapi.responses import JSONResponse
-    import json
-    body = json.dumps(resp.model_dump(), ensure_ascii=False).encode("utf-8")
     return JSONResponse(
-        content=resp.model_dump(),
+        content=resp.model_dump(mode="json"),
         headers={"X-Owner-Key": owner_key, "Access-Control-Expose-Headers": "X-Owner-Key"},
     )

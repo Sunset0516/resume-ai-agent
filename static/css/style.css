@@ -58,6 +58,7 @@ html, body {
     flex-direction: column;
     overflow: hidden;
 }
+.sidebar > .topbar { flex-shrink: 0; }
 
 /* 右侧：聊天区域 */
 .chat-panel {
@@ -65,6 +66,8 @@ html, body {
     flex-direction: column;
     background: var(--bg);
     min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* =========================================================
@@ -151,6 +154,7 @@ html, body {
     text-align: center;
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg, var(--primary-light) 0%, var(--bg-card) 100%);
+    flex-shrink: 0;
 }
 
 .resume-avatar {
@@ -206,8 +210,10 @@ html, body {
 
 .resume-body {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 16px 20px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .resume-section {
@@ -329,6 +335,7 @@ html, body {
 /* =========================================================
    聊天区域
    ========================================================= */
+.chat-panel > .chat-header, .chat-panel > .chat-input-wrap { flex-shrink: 0; }
 .chat-header {
     padding: 18px 28px;
     background: var(--bg-card);
@@ -414,7 +421,10 @@ html, body {
    ========================================================= */
 .chat-messages {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 24px 28px;
     display: flex;
     flex-direction: column;
@@ -427,6 +437,7 @@ html, body {
     max-width: 560px;
     text-align: center;
     padding: 40px 20px;
+    flex-shrink: 0;
 }
 .welcome-icon {
     width: 72px;
@@ -485,6 +496,7 @@ html, body {
 .message-row {
     display: flex;
     gap: 12px;
+    flex-shrink: 0;  /* 关键：防止被 flex 容器压缩，保证可滚动 */
     animation: fadeInUp 0.3s ease;
 }
 @keyframes fadeInUp {
@@ -571,6 +583,7 @@ html, body {
    ========================================================= */
 .chat-input-wrap {
     padding: 18px 28px 24px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
     background: var(--bg-card);
     border-top: 1px solid var(--border);
 }
@@ -661,8 +674,9 @@ html, body {
         box-shadow: 0 10px 40px rgba(0,0,0,0.12);
     }
     /* body.mobile-show-resume 时，把侧边栏作为整屏简历视图展开 */
-    body.mobile-show-resume .sidebar { display: flex; }
+    body.mobile-show-resume .sidebar { display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     body.mobile-show-resume .chat-panel { display: none; }
+    body.mobile-show-resume .resume-body { overflow-y: visible; }
 
     .chat-header { padding: 12px 14px; gap: 8px; }
     .chat-header-title { font-size: 15px; gap: 8px; }
@@ -678,7 +692,7 @@ html, body {
     }
 
     .chat-messages { padding: 12px; }
-    .chat-input-wrap { padding: 8px 10px 14px; }
+    .chat-input-wrap { padding: 8px 10px max(14px, env(safe-area-inset-bottom, 0px)); }
     .welcome { padding: 18px 14px; }
     .welcome h1 { font-size: 20px; }
     .suggestions { grid-template-columns: 1fr; }
@@ -789,3 +803,37 @@ body.is-share-view .chat-header-actions a[href="/admin"] {
     body.mobile-show-resume .mobile-back-btn { display: inline-flex !important; }
     body.mobile-show-resume .topbar .badge-online { display: none; }
 }
+
+
+/* === 移动端顶栏（桌面端隐藏，移动端显示）=== */
+.mobile-topbar {
+    display: none !important;
+}
+
+.mobile-resume-overlay {
+    display: none !important;
+}
+
+@media (max-width: 960px) {
+    .mobile-topbar {
+        display: none !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .mobile-resume-overlay {
+        display: block !important;
+    }
+}
+
+/* === 底部安全区域适配（系统导航栏/手势条） === */
+html { height: 100%; }
+body { height: 100vh; }
+@supports (height: 100dvh) {
+    body { height: 100dvh; }
+}
+.chat-panel { height: 100%; }

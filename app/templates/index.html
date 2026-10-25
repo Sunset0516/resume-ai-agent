@@ -1,28 +1,63 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>个人简历 AI 助手</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI 简历助手 · 实习生简历展示</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=20261025">
 </head>
 <body>
+
+<!-- 移动端顶栏 -->
+<div class="mobile-topbar" id="mobile-topbar">
+    <div class="mobile-topbar-inner">
+        <div class="mobile-brand">
+            <div class="mobile-logo">R</div>
+            <div class="mobile-brand-text">
+                <div class="mobile-title">Resume AI</div>
+                <div class="mobile-subtitle" id="mobile-subtitle">实习生简历 · 智能问答</div>
+            </div>
+        </div>
+        <div class="mobile-topbar-actions">
+            <button class="mobile-profile-card" id="btn-mobile-profile" title="查看简历信息">
+                <div class="mpc-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+                </div>
+                <div class="mpc-text">
+                    <div class="mpc-name" id="mpc-name">查看简历</div>
+                    <div class="mpc-label">点击查看</div>
+                </div>
+                <div class="mpc-arrow">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 移动端简历面板（覆盖层） -->
+<div class="mobile-resume-overlay" id="mobile-resume-overlay">
+    <div class="mobile-overlay-header">
+        <span class="mobile-overlay-title">简历信息</span>
+        <button class="mobile-icon-btn" id="btn-close-overlay" title="关闭">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+    </div>
+    <div class="mobile-overlay-body" id="mobile-overlay-body"></div>
+</div>
 
 <div class="app-container">
 
     <!-- 左侧：简历面板 -->
     <aside class="sidebar">
-        <div class="topbar" style="border-bottom:1px solid var(--border); padding: 14px 20px;">
+        <div class="topbar">
             <div class="topbar-left">
                 <div class="topbar-logo">R</div>
                 <div>
                     <div class="topbar-title">Resume AI</div>
-                    <div class="topbar-subtitle">个人简历智能助手</div>
+                    <div class="topbar-subtitle">实习生简历 · 智能问答</div>
                 </div>
             </div>
-            <button class="btn btn-primary mobile-only mobile-back-btn" id="btn-back-chat" title="返回聊天" style="display:none;">
-                <span>💬</span> <span>返回聊天</span>
-            </button>
             <span class="badge badge-online"><span class="badge-dot"></span>在线</span>
         </div>
 
@@ -34,6 +69,12 @@
         </div>
 
         <div class="resume-body">
+            <!-- 面试官亮点区域 -->
+            <div class="interviewer-highlights" id="interviewer-highlights" style="display:none;">
+                <div class="highlights-title">⭐ 面试官快速参考</div>
+                <div class="highlights-grid" id="highlights-grid"></div>
+            </div>
+
             <div class="resume-section">
                 <div class="resume-section-title">个人简介</div>
                 <div class="resume-summary" id="resume-summary"></div>
@@ -66,19 +107,23 @@
         <div class="chat-header">
             <div class="chat-header-title">
                 <span class="ai-icon">🤖</span>
-                <span><span id="visitor-name">同学</span>的 AI 助手</span>
+                <span><span id="visitor-name">面试官</span>的 AI 助手</span>
             </div>
             <div class="chat-header-actions">
-                <button class="btn btn-primary mobile-only" id="btn-toggle-resume" title="查看简历 / 返回聊天">
-                    <span>📋</span> <span class="mobile-toggle-text">查看简历</span>
-                </button>
                 <button class="btn btn-secondary" id="btn-new-chat" title="开启新会话">
                     <span>＋</span> 新会话
                 </button>
-                <a href="/admin" class="btn btn-secondary" title="后台管理">
-                    <span>⚙</span> 管理后台
-                </a>
             </div>
+        </div>
+
+        <!-- 移动端关键信息提示条 -->
+        <div class="mobile-info-strip" id="mobile-info-strip" style="display:none;">
+            <div class="info-strip-label">📋 主要内容</div>
+            <div class="info-strip-main">
+                <span class="info-strip-name" id="info-strip-name">加载中</span>
+                <span class="info-strip-title" id="info-strip-title"></span>
+            </div>
+            <div class="info-strip-tags" id="info-strip-tags"></div>
         </div>
 
         <div class="chat-messages" id="chat-messages">
@@ -87,12 +132,12 @@
                 <div class="welcome-icon">✨</div>
                 <h1>你好，我是 AI 简历助手</h1>
                 <p>
-                    我可以帮面试官和访客了解求职者的简历信息。<br>
-                    你可以询问教育背景、实习经历、项目成果、技术栈等任何问题。
+                    我可以帮您快速了解求职者的简历信息。<br>
+                    点击下方建议或直接提问，例如教育背景、实习经历、项目成果等。
                 </p>
                 <div class="suggestions">
                     <div class="suggestion-card">
-                        <div class="tag">教育背景</div>
+                        <div class="tag">自我简介</div>
                         <div class="q">请做一下自我介绍</div>
                     </div>
                     <div class="suggestion-card">
@@ -101,11 +146,19 @@
                     </div>
                     <div class="suggestion-card">
                         <div class="tag">项目经验</div>
-                        <div class="q">介绍一下你做过的项目和技术选型</div>
+                        <div class="q">介绍一下你最得意的项目</div>
                     </div>
                     <div class="suggestion-card">
                         <div class="tag">实习经历</div>
-                        <div class="q">讲讲你印象最深的一段实习做了什么</div>
+                        <div class="q">讲讲你印象最深的一段实习</div>
+                    </div>
+                    <div class="suggestion-card">
+                        <div class="tag">核心优势</div>
+                        <div class="q">你认为自己的核心竞争力是什么？</div>
+                    </div>
+                    <div class="suggestion-card">
+                        <div class="tag">职业规划</div>
+                        <div class="q">未来一两年的职业规划是什么？</div>
                     </div>
                 </div>
             </div>
@@ -123,45 +176,14 @@
                     ➤
                 </button>
             </div>
-            <div class="input-tip">按 Enter 发送，Shift + Enter 换行 · AI 回答仅供参考，关键信息请以简历原文为准</div>
+            <div class="input-tip">按 Enter 发送，Shift + Enter 换行 · AI 回答基于简历信息生成</div>
         </div>
     </main>
 </div>
 
-<script src="/static/js/chat.js"></script>
 <script>
-(function () {
-  // 面试官分享链接场景：URL 带 ?owner_key=xxx 时，隐藏管理后台入口
-  try {
-    const p = new URL(location.href).searchParams.get('owner_key');
-    if (p && p.trim()) {
-      document.body.classList.add('is-share-view');
-    }
-  } catch (e) {}
-
-  // 移动端 查看简历 / 切换回聊天
-  const btn = document.getElementById('btn-toggle-resume');
-  const backBtn = document.getElementById('btn-back-chat');
-  function toggleResume(show) {
-    document.body.classList.toggle('mobile-show-resume', show);
-    const text = btn && btn.querySelector('.mobile-toggle-text');
-    if (text) text.textContent = show ? '查看简历' : '查看简历';
-    if (backBtn) backBtn.style.display = show ? 'inline-flex' : 'none';
-    if (show) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      const side = document.querySelector('.sidebar');
-      if (side) side.scrollTop = 0;
-    } else {
-      // 回到聊天时聚焦输入框
-      const inp = document.getElementById('chat-input');
-      if (inp) inp.focus();
-    }
-  }
-  if (btn) btn.addEventListener('click', () => {
-    toggleResume(!document.body.classList.contains('mobile-show-resume'));
-  });
-  if (backBtn) backBtn.addEventListener('click', () => toggleResume(false));
-})();
+  window.ROOT_PATH = "{{ root_path }}";
 </script>
+<script src="{{ url_for('static', path='js/chat.js') }}?v=20261025"></script>
 </body>
 </html>
