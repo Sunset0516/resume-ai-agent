@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     RAG_ENABLED: bool = True
     RAG_TOP_K: int = 4
     RAG_MIN_SCORE: float = 0.30
+    RAG_RECALL_K: int = 12            # 一阶段召回条数，作为重排候选池
+
+    # ---------- Rerank 精排配置 ----------
+    RERANK_ENABLED: bool = True
+    RERANK_API_KEY: str = ""          # 留空则复用 LLM_API_KEY
+    RERANK_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+    RERANK_MODEL: str = "rerank"
 
     # ---------- 记忆压缩配置 ----------
     HISTORY_LIMIT: int = 10

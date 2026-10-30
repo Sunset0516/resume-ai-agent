@@ -1,10 +1,11 @@
 """
 简历检索评测脚本（离线跑分，不调用生成模型）
 
-对比三种检索方式在同一评测集上的表现：
+对比四种检索方式在同一评测集上的表现：
 1. 关键词检索（jieba 分词 + 命中率）
 2. 向量检索（Embedding + 余弦相似度）
 3. 混合检索（向量 + 章节词加权）
+4. 混合召回 + Rerank 精排（智谱 rerank）
 
 指标：Recall@1 / Recall@4 / MRR，以及单题平均检索耗时。
 运行：
@@ -24,12 +25,13 @@ logging.basicConfig(level=logging.WARNING)
 from app.database import SessionLocal, init_db  # noqa: E402
 from app.services.resume_crud import ResumeCRUD  # noqa: E402
 from app.services.rag_service import (  # noqa: E402
-    ResumeRAGService, embedding_client, _cosine, is_broad_question,
+    ResumeRAGService, embedding_client, rerank_client, _cosine, is_broad_question,
 )
 from app.services.memory_service import tokenize  # noqa: E402
 
 EVAL_FILE = Path(__file__).resolve().parent / "eval_set.json"
 TOP_K = 4
+RECALL_K = 12
 
 
 # ---------------------- 三种检索实现 ----------------------
@@ -53,7 +55,7 @@ def vector_rank(chunks, question, qvec):
     return scored[:TOP_K]
 
 
-def hybrid_rank(chunks, question, qvec):
+def _hybrid_scored(chunks, question, qvec):
     if not qvec:
         return []
     tokens = tokenize(question)
@@ -65,7 +67,25 @@ def hybrid_rank(chunks, question, qvec):
         bonus = 0.03 * sum(1 for t in tokens if t in head)
         scored.append((_cosine(qvec, v) + min(bonus, 0.06), c))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return scored[:TOP_K]
+    return scored
+
+
+def hybrid_rank(chunks, question, qvec):
+    return _hybrid_scored(chunks, question, qvec)[:TOP_K]
+
+
+def rerank_rank(chunks, question, qvec):
+    """混合召回 RECALL_K 条候选 → Rerank 精排 → 取 TOP_K；返回 (结果, 耗时ms)"""
+    cand = _hybrid_scored(chunks, question, qvec)[:RECALL_K]
+    if not cand or not rerank_client.enabled:
+        return [], 0.0
+    docs = [f'{c["section"]} {c["title"] or ""}\n{c["content"]}' for _, c in cand]
+    t0 = time.perf_counter()
+    ranked = rerank_client.rerank(question, docs, top_n=min(TOP_K, len(docs)))
+    ms = (time.perf_counter() - t0) * 1000
+    if not ranked:
+        return [], ms
+    return [(s, cand[i][1]) for i, s in ranked], ms
 
 
 _vectors_cache = []
@@ -93,6 +113,25 @@ def evaluate(method, questions, chunks, qvecs):
         mrr += (1.0 / rank) if rank else 0.0
     n = len(questions) or 1
     return r1 / n, r4 / n, mrr / n, failures
+
+
+def evaluate_rerank(questions, chunks, qvecs):
+    """混合召回 + Rerank 精排，返回指标与单题平均重排耗时"""
+    r1 = r4 = mrr = total_ms = 0.0
+    failures = []
+    for q in questions:
+        result, ms = rerank_rank(chunks, q["question"], qvecs.get(q["id"]))
+        total_ms += ms
+        if result and result[0][1]["section"] in q["expected_sections"]:
+            r1 += 1
+        if any(c["section"] in q["expected_sections"] for _, c in result):
+            r4 += 1
+        else:
+            failures.append((q["question"], q["expected_sections"], [c["section"] for _, c in result]))
+        rank = first_hit_rank(result, q["expected_sections"])
+        mrr += (1.0 / rank) if rank else 0.0
+    n = len(questions) or 1
+    return r1 / n, r4 / n, mrr / n, failures, total_ms / n
 
 
 def main():
@@ -146,6 +185,14 @@ def main():
         r1, r4, mrr, fails = evaluate(fn, answerable, chunks, qvecs)
         all_failures[name] = fails
         print(f"{name:<15}{r1:>8.2f}{r4:>10.2f}{mrr:>8.2f}{ms:>16.0f}ms")
+
+    if rerank_client.enabled:
+        r1, r4, mrr, fails, rr_ms = evaluate_rerank(answerable, chunks, qvecs)
+        all_failures["混合+重排"] = fails
+        total_ms = embed_ms / max(len(questions), 1) + rr_ms
+        print(f"{'混合+重排':<15}{r1:>8.2f}{r4:>10.2f}{mrr:>8.2f}{total_ms:>16.0f}ms")
+    else:
+        print("未启用 Rerank，跳过精排对比")
 
     for name, fails in all_failures.items():
         if fails:

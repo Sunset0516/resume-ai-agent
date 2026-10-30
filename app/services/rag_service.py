@@ -4,11 +4,13 @@
 职责：
 1. 把结构化简历拆成「章节 + 条目」粒度的片段（教育/实习/项目/技能各成片段）
 2. 调用 Embedding API 生成向量，并缓存在 resume_chunks 表（简历更新后自动重建）
-3. 查询时做余弦相似度检索，返回片段与章节引用；向量不可用时降级为关键词检索
+3. 查询时两阶段检索：混合检索召回候选 → Rerank 精排；精排不可用时降级为混合排序，
+   向量也不可用时再降级为关键词检索
 
 设计取舍：
 - 概览类问题（总结/介绍/评价）直接注入完整简历，避免只取到片段导致回答不完整
 - 具体问题走检索，只把相关的几条片段喂给 LLM，降低 token 成本并支持引用溯源
+- Rerank 用 cross-encoder 逐条打分，能修正向量召回"语义相近但章节不对"的排序问题
 """
 import logging
 import math
@@ -87,6 +89,60 @@ class EmbeddingClient:
 
 
 embedding_client = EmbeddingClient()
+
+
+class RerankClient:
+    """
+    智谱 Rerank 客户端：对一阶段召回的候选片段做 cross-encoder 精排。
+    失败时返回 None，由调用方降级为原混合排序，不阻塞回答。
+    """
+
+    def __init__(self):
+        self.api_key = settings.RERANK_API_KEY or settings.LLM_API_KEY
+        self.base_url = settings.RERANK_BASE_URL.rstrip("/")
+        self.model = settings.RERANK_MODEL
+        self.timeout = 20
+        self.max_docs = 128
+        self.max_chars = 4096
+
+    @property
+    def enabled(self) -> bool:
+        return bool(settings.RERANK_ENABLED and self.api_key)
+
+    def rerank(self, query: str, documents: List[str],
+               top_n: Optional[int] = None) -> Optional[List[Tuple[int, float]]]:
+        """返回 [(原始下标, 相关性分数)]，按分数降序；失败返回 None"""
+        docs = [(d or "")[:self.max_chars] for d in documents][:self.max_docs]
+        if not docs:
+            return None
+        payload = {
+            "model": self.model,
+            "query": (query or "")[:self.max_chars],
+            "documents": docs,
+        }
+        if top_n:
+            payload["top_n"] = min(int(top_n), len(docs))
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(f"{self.base_url}/rerank", headers=headers, json=payload)
+                resp.raise_for_status()
+                results = resp.json().get("results") or []
+        except Exception as e:
+            logger.warning(f"[RAG] Rerank 调用失败，降级为混合排序: {e}")
+            return None
+        ranked = [
+            (int(r.get("index", -1)), float(r.get("relevance_score", 0.0)))
+            for r in results
+        ]
+        ranked = [x for x in ranked if 0 <= x[0] < len(docs)]
+        if not ranked:
+            return None
+        ranked.sort(key=lambda x: x[1], reverse=True)
+        return ranked
+
+
+rerank_client = RerankClient()
 
 
 class ResumeRAGService:
@@ -191,6 +247,10 @@ class ResumeRAGService:
 
         stale = len(rows) != len(desired)
         if not stale:
+            # 向量缺失（例如上次 Embedding 服务不可用）也要重建，否则会永久退化为关键词检索
+            if embedding_client.enabled and any(not r.embedding for r in rows):
+                stale = True
+        if not stale:
             for r in rows:
                 if not r.resume_version or not version:
                     stale = True
@@ -231,7 +291,8 @@ class ResumeRAGService:
                top_k: Optional[int] = None,
                min_score: Optional[float] = None) -> Tuple[List[Tuple[float, ResumeChunk]], str]:
         """
-        返回：( [(相似度, 片段)], 检索模式 vector/keyword )
+        返回：( [(相似度, 片段)], 检索模式 hybrid+rerank/hybrid/keyword )
+        两阶段：混合检索召回 RAG_RECALL_K 条候选 → Rerank 精排 → 截断 top_k
         """
         top_k = top_k or settings.RAG_TOP_K
         min_score = settings.RAG_MIN_SCORE if min_score is None else min_score
@@ -253,11 +314,32 @@ class ResumeRAGService:
                     head = f"{c.section} {c.title or ''}".lower()
                     bonus = 0.03 * sum(1 for t in tokens if t in head)
                     scored.append((score + min(bonus, 0.06), c))
+                scored.sort(key=lambda x: x[0], reverse=True)
+
+                candidates = scored[:max(int(settings.RAG_RECALL_K), top_k)]
+                reranked = self._rerank(query, candidates, top_k)
+                if reranked:
+                    return reranked, "hybrid+rerank"
+
                 hits = [(s, c) for s, c in scored if s >= min_score]
-                hits.sort(key=lambda x: x[0], reverse=True)
                 return hits[:top_k], "hybrid"
 
         return self._keyword_search(query, chunks, top_k), "keyword"
+
+    @staticmethod
+    def _rerank(query: str, candidates: List[Tuple[float, ResumeChunk]],
+                top_k: int) -> Optional[List[Tuple[float, ResumeChunk]]]:
+        """精排候选片段；不可用或失败时返回 None，由调用方沿用混合排序"""
+        if not rerank_client.enabled or not candidates:
+            return None
+        docs = [
+            f"{c.section} {c.title or ''}\n{c.content}"
+            for _, c in candidates
+        ]
+        ranked = rerank_client.rerank(query, docs, top_n=min(top_k, len(docs)))
+        if not ranked:
+            return None
+        return [(score, candidates[idx][1]) for idx, score in ranked]
 
     def _keyword_search(self, query: str, chunks: List[ResumeChunk],
                         top_k: int) -> List[Tuple[float, ResumeChunk]]:
